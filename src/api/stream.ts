@@ -35,6 +35,7 @@ const KNOWN: Record<CoachEvent['kind'], true> = {
   rescue_proposal: true,
   purchase_order: true,
   supply_rules: true,
+  supply: true,
   chart: true,
   action: true,
   payment_link: true,

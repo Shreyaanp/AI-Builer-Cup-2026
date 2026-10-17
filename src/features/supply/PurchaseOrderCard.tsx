@@ -27,6 +27,8 @@ import { useLocale } from '../../state/hooks'
 import { enterRise, fieldFade, shape } from '../../design/theme'
 import { chalkWrite, stampThud } from '../../design/chalkMotion'
 import { formatPrice } from '../v1/format'
+import { Sheet } from '../v1/Sheet'
+import { useShowcaseCopy } from './showcaseCopy'
 import { orderTotal, poNumber } from './orderFormat'
 import { useSupplyCopy, type SupplyCopy } from './copy'
 import { dayLabel, usePoActions, type SimVariant } from './supplyData'
@@ -133,6 +135,11 @@ export function PurchaseOrderCard({
   const roles = useTheme().material
   const s = useSupplyCopy()
   const f = useFormat(order)
+  const showcase = useShowcaseCopy()
+  const [sapOpen, setSapOpen] = useState(false)
+  const sap = order.documents.find(
+    (doc) => doc.kind === 'ORDERS' && doc.translated_format === 'idoc',
+  )
   const actions = usePoActions(onChange)
   const [busy, setBusy] = useState<string | null>(null)
   const draft = order.status === 'draft'
@@ -199,6 +206,11 @@ export function PurchaseOrderCard({
         />
       </Stack>
       <Box>
+        {draft && (
+          <Typography variant="labelLarge" color="text.secondary">
+            {showcase.draft}
+          </Typography>
+        )}
         <Typography variant="titleSmall" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {order.supplier.name}
         </Typography>
@@ -217,6 +229,8 @@ export function PurchaseOrderCard({
         </Typography>
         {draft && (
           <Typography variant="bodyMedium" color="text.secondary" sx={{ mt: 1 }}>
+            {order.reason.moq != null &&
+              `${s.moq}: ${f.qty(order.reason.moq)} ${order.reason.unit} · `}
             {why(order, s, f)}
           </Typography>
         )}
@@ -229,9 +243,9 @@ export function PurchaseOrderCard({
             ))}
           </Box>
         )}
-        {order.simulated && draft && (
+        {order.simulated && (
           <Typography variant="bodySmall" color="text.secondary" sx={{ mt: 1 }}>
-            {s.simulationNote}
+            {order.supplier.system === 'idoc' ? showcase.simulated : s.simulationNote}
           </Typography>
         )}
       </Box>
@@ -319,6 +333,39 @@ export function PurchaseOrderCard({
               {s.autoSent}
             </Typography>
           )}
+          {sap && (
+            <Button onClick={() => setSapOpen(true)} sx={{ minHeight: 48 }}>
+              {showcase.sap}
+            </Button>
+          )}
+          <Sheet
+            open={sapOpen}
+            onClose={() => setSapOpen(false)}
+            titleId="sap-order-title"
+            title={showcase.sap}
+          >
+            {sap && (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: 4,
+                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '1fr 1fr' },
+                }}
+              >
+                <Box>
+                  <Typography variant="titleMedium" component="h3">
+                    {showcase.plain}
+                  </Typography>
+                  <Typography sx={{ mt: 2 }}>
+                    {order.buyer.name} → {order.supplier.name}
+                  </Typography>
+                  <Typography sx={{ mt: 2 }}>{headline(order, s, f)}</Typography>
+                  <Typography sx={{ mt: 2 }}>{showcase.simulated}</Typography>
+                </Box>
+                <Code label={s.system.idoc} text={sap.translated} />
+              </Box>
+            )}
+          </Sheet>
           <Timeline order={order} busy={busy} act={act} actions={actions} />
           <NextStep order={order} busy={busy} act={act} actions={actions} />
         </>
@@ -344,13 +391,25 @@ function Timeline({
 }) {
   const roles = useTheme().material
   const s = useSupplyCopy()
+  const showcase = useShowcaseCopy()
+  const locale = useLocale()
+  const time = (at: number) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
+      new Date(at * 1000),
+    )
+  const titles = {
+    ORDERS: showcase.sent,
+    ORDRSP: showcase.confirmed,
+    DESADV: showcase.shipping,
+    INVOIC: s.step.INVOIC,
+  }
   const docs = new Map(order.documents.map((doc) => [doc.kind, doc]))
   return (
     <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 0 }}>
-      {STEPS.map((kind, index) => {
+      {STEPS.map((kind) => {
         const doc = docs.get(kind)
         const current = !doc && NEXT[order.status] === kind
-        const last = index === STEPS.length - 1
+        const last = false
         return (
           <Box
             component="li"
@@ -388,11 +447,11 @@ function Timeline({
             </Box>
             <Box sx={{ pb: last ? 0 : 3, minWidth: 0 }}>
               <Typography variant="titleSmall" sx={{ lineHeight: '28px' }}>
-                {s.step[kind]}
+                {titles[kind]}
                 {doc && (
                   <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
                     {' '}
-                    · {doc.number}
+                    · {time(doc.at)}
                   </Box>
                 )}
                 {!doc && (
@@ -409,6 +468,17 @@ function Timeline({
           </Box>
         )
       })}
+      <Box component="li" sx={{ display: 'grid', gridTemplateColumns: '32px 1fr', gap: 2 }}>
+        <Box
+          aria-hidden="true"
+          sx={{ display: 'grid', placeItems: 'center', height: 28, color: roles.primary }}
+        >
+          <PackageCheck size={20} />
+        </Box>
+        <Typography variant="titleSmall" sx={{ lineHeight: '28px' }}>
+          {showcase.received} · {order.received_at ? time(order.received_at) : s.waiting}
+        </Typography>
+      </Box>
     </Box>
   )
 }
@@ -582,7 +652,7 @@ function DocumentDetail({
   )
 }
 
-function Code({ label, text }: { label: string; text: string }) {
+export function Code({ label, text }: { label: string; text: string }) {
   const roles = useTheme().material
   return (
     <Box sx={{ minWidth: 0 }}>
@@ -672,6 +742,7 @@ function NextStep({
   actions: Actions
 }) {
   const s = useSupplyCopy()
+  const showcase = useShowcaseCopy()
   const f = useFormat(order)
   const roles = useTheme().material
   const [paste, setPaste] = useState(false)
@@ -724,7 +795,7 @@ function NextStep({
       )}
       {(order.status === 'dispatched' || (order.status === 'invoiced' && !order.received)) && (
         <Button
-          variant={order.status === 'dispatched' ? 'contained' : 'outlined'}
+          variant={order.status === 'invoiced' ? 'contained' : 'outlined'}
           disabled={busy !== null || flags > 0}
           onClick={() => void act('received', () => actions.received(order))}
           startIcon={icon('received', <PackageCheck size={18} />)}
@@ -733,7 +804,7 @@ function NextStep({
           {s.goodsArrived}
         </Button>
       )}
-      {order.status === 'invoiced' && (
+      {order.status === 'invoiced' && order.received && (
         <Box>
           {order.disputed && (
             <Typography variant="bodyMedium" sx={{ mb: 2, display: 'flex', gap: 1.5 }}>
@@ -771,36 +842,53 @@ function NextStep({
         >
           {order.simulated && sim.length > 0 && (
             <>
-              <Typography
-                variant="labelLarge"
-                sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mb: 2 }}
+              <Button
+                variant="contained"
+                disabled={busy !== null}
+                sx={{ minHeight: 48, mb: 2 }}
+                startIcon={
+                  busy === 'sim-next' ? <CircularProgress size={16} color="inherit" /> : undefined
+                }
+                onClick={() =>
+                  void act('sim-next', () =>
+                    actions.simulate(order, waitingFor === 'INVOIC' ? 'match' : 'full'),
+                  )
+                }
               >
-                <FlaskConical size={16} aria-hidden="true" />
-                {s.simTitle}
-              </Typography>
-              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
-                {sim.map((option, index) => (
-                  <Button
-                    key={option.variant}
-                    size="small"
-                    variant={index === 0 ? 'contained' : 'outlined'}
-                    color="secondary"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      void act(`sim-${option.variant}`, () =>
-                        actions.simulate(order, option.variant),
-                      )
-                    }
-                    startIcon={
-                      busy === `sim-${option.variant}` ? (
-                        <CircularProgress size={14} color="inherit" />
-                      ) : undefined
-                    }
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </Stack>
+                {showcase.simulate}
+              </Button>
+              <Box>
+                <Typography
+                  variant="labelLarge"
+                  sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mb: 2 }}
+                >
+                  <FlaskConical size={16} aria-hidden="true" />
+                  {s.simTitle}
+                </Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
+                  {sim.map((option) => (
+                    <Button
+                      key={option.variant}
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        void act(`sim-${option.variant}`, () =>
+                          actions.simulate(order, option.variant),
+                        )
+                      }
+                      startIcon={
+                        busy === `sim-${option.variant}` ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : undefined
+                      }
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </Stack>
+              </Box>
             </>
           )}
           <Button

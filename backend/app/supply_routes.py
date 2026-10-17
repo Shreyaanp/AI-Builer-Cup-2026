@@ -6,7 +6,7 @@ import anyio
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import coordinator, supply_chain
+from . import coordinator, supply_chain, supply_io, supply_outbound
 from .forecast import ForecastService
 from .limits import enforce_limits
 from .merchant_routes import consented_owner, owner, store
@@ -84,7 +84,33 @@ async def overview(business_id: str, request: Request) -> dict[str, Any]:
         supply_chain.relationships, store(request), uid, business_id
     )
     orders = await anyio.to_thread.run_sync(supply_chain.orders, store(request), uid, business_id)
-    return {"suppliers": rows, "orders": orders}
+    context = await anyio.to_thread.run_sync(store(request).context, uid, business_id)
+    history = await anyio.to_thread.run_sync(store(request).sales_history, uid, business_id)
+    today = supply_chain.shop_today(context)
+    forecast = await forecaster(request).forecast(history, today, context["inventory"])
+    needs = [
+        {"item": product["name"], **need}
+        for product in context["inventory"]
+        if (
+            need := supply_chain.need_from_forecast(
+                product, forecast.model_dump(mode="json"), product["name"], today
+            )
+        )["runs_out"]
+        and need["stock_known"]
+    ]
+    needs.sort(key=lambda need: need["runs_out"])
+    return {"suppliers": rows, "orders": orders, "needs": needs}
+
+
+@router.post("/supply/demo")
+async def showcase(request: Request) -> dict[str, str]:
+    """Explicit local demo; creates a private buyer and simulated supplier only."""
+    uid = await consented_owner(request)
+    if request.app.state.v1_settings.app_env not in {"local", "test"}:
+        raise HTTPException(404, "Not found.")
+    from .supply_showcase import create_showcase
+
+    return {"business_id": await create_showcase(store(request), uid)}
 
 
 @router.put("/businesses/{business_id}/supply/suppliers/{supplier_id}/rules")
@@ -239,4 +265,178 @@ async def received(
     uid = await consented_owner(request)
     return await anyio.to_thread.run_sync(
         supply_chain.receive, store(request), uid, business_id, order_id, body.version
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# Inbound and outbound with partners (supply_io.py)
+
+
+class PartnerDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    text: str = Field(min_length=10, max_length=20_000)
+    partner_id: str = Field(default="", max_length=80)
+
+
+class ChangeAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    accept: bool = True
+
+
+class LineQuantity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    line: int = Field(ge=1, le=99_990)
+    quantity: float = Field(ge=0, le=1_000_000)
+
+
+class ReceiptBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    version: int = Field(ge=1)
+    received: list[LineQuantity] = Field(default_factory=list, max_length=60)
+    note: str = Field(default="", max_length=300)
+
+
+class AsnBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    shipped: list[LineQuantity] = Field(default_factory=list, max_length=60)
+
+
+class SendBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    doc_id: str = Field(min_length=1, max_length=40)
+
+
+async def _shown(request: Request, uid: str, bid: str, action: Any, *args: Any) -> dict[str, Any]:
+    """Run an order action and return the order as the board shows it (status, timeline)."""
+
+    def run() -> dict[str, Any]:
+        return supply_outbound.present(store(request), uid, bid, action(*args))
+
+    return await anyio.to_thread.run_sync(run)
+
+
+@router.get("/businesses/{business_id}/supply/board")
+async def board(business_id: str, request: Request) -> dict[str, Any]:
+    """What needs the owner, what came in, what was received and what must go out."""
+    uid = await owner(request)
+    return await anyio.to_thread.run_sync(supply_outbound.board, store(request), uid, business_id)
+
+
+@router.post("/businesses/{business_id}/supply/inbound")
+async def partner_document(
+    business_id: str, body: PartnerDocument, request: Request
+) -> dict[str, Any]:
+    """A partner's order create, order change or forecast (IDoc XML, CSV, JSON, a message),
+    or a supplier's confirmation / shipping notice / invoice for one of the shop's orders."""
+    uid = await consented_owner(request)
+    await enforce_limits(request, [("coach", uid)])
+    return await supply_io.receive_document(
+        store(request), uid, business_id, body.text, body.partner_id
+    )
+
+
+@router.post("/businesses/{business_id}/supply/demo/next")
+async def demo_next(business_id: str, request: Request) -> dict[str, Any]:
+    """Demo: the synthetic buyer sends its next document (forecast, order, change) as an IDoc."""
+    uid = await consented_owner(request)
+    from .demo_supply_seed import next_document
+
+    return await anyio.to_thread.run_sync(next_document, store(request), uid, business_id)
+
+
+@router.post("/businesses/{business_id}/supply/orders/{order_id}/change")
+async def answer_change(
+    business_id: str, order_id: str, body: ChangeAnswer, request: Request
+) -> dict[str, Any]:
+    uid = await consented_owner(request)
+    return await _shown(
+        request,
+        uid,
+        business_id,
+        supply_io.accept_change,
+        store(request),
+        uid,
+        business_id,
+        order_id,
+        body.version,
+        body.accept,
+    )
+
+
+@router.post("/businesses/{business_id}/supply/orders/{order_id}/receipt")
+async def goods_receipt(
+    business_id: str, order_id: str, body: ReceiptBody, request: Request
+) -> dict[str, Any]:
+    """Goods came in: lines left out arrived in full. The receipt waits until sent."""
+    uid = await consented_owner(request)
+    return await _shown(
+        request,
+        uid,
+        business_id,
+        supply_outbound.record_receipt,
+        store(request),
+        uid,
+        business_id,
+        order_id,
+        body.version,
+        {row.line: row.quantity for row in body.received},
+        body.note,
+    )
+
+
+@router.post("/businesses/{business_id}/supply/orders/{order_id}/asn")
+async def shipping_notice(
+    business_id: str, order_id: str, body: AsnBody, request: Request
+) -> dict[str, Any]:
+    uid = await consented_owner(request)
+    return await _shown(
+        request,
+        uid,
+        business_id,
+        supply_outbound.prepare_asn,
+        store(request),
+        uid,
+        business_id,
+        order_id,
+        body.version,
+        {row.line: row.quantity for row in body.shipped},
+    )
+
+
+@router.post("/businesses/{business_id}/supply/orders/{order_id}/send")
+async def send_document(
+    business_id: str, order_id: str, body: SendBody, request: Request
+) -> dict[str, Any]:
+    uid = await consented_owner(request)
+    return await _shown(
+        request,
+        uid,
+        business_id,
+        supply_outbound.send,
+        store(request),
+        uid,
+        business_id,
+        order_id,
+        body.version,
+        body.doc_id,
+    )
+
+
+@router.post("/businesses/{business_id}/supply/send-all")
+async def send_all(business_id: str, request: Request) -> dict[str, Any]:
+    """Close the day: everything still unsent goes out in one tap."""
+    uid = await consented_owner(request)
+    return await anyio.to_thread.run_sync(
+        supply_outbound.send_all, store(request), uid, business_id
+    )
+
+
+@router.post("/businesses/{business_id}/supply/inbox/{entry_id}/dismiss")
+async def dismiss(business_id: str, entry_id: str, request: Request) -> dict[str, Any]:
+    uid = await consented_owner(request)
+    return await anyio.to_thread.run_sync(
+        supply_io.dismiss, store(request), uid, business_id, entry_id
     )

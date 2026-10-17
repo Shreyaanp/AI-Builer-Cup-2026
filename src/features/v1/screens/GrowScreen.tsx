@@ -12,6 +12,7 @@ import { useCopy as usePlanCopy } from '../../planning/strings'
 import { RecapTile } from '../../sales/ShopInsights'
 import { OrdersTile } from '../../sourcing/Orders'
 import { SupplyTile } from '../../supply/Supply'
+import { SupplyHubTile } from '../../supply/SupplyHub'
 import { WeekPulseTile } from '../../analytics/WeekPulse'
 import { growOrderOf } from '../playbook/growOrder'
 import { usePlaybook } from '../playbook/usePlaybook'
@@ -49,6 +50,7 @@ export function GrowScreen() {
  * playbook tool of their own stay beside the closest one (supply with orders). */
 const GROW_ALIAS: Record<string, string> = {
   supply: 'orders',
+  supply_io: 'orders',
   radar: 'rescue',
   payments: 'rescue',
   week: 'recap',
@@ -90,6 +92,7 @@ function GrowTiles() {
     ...(evening ? [close, prep] : [prep, close]),
     ['orders', <OrdersTile key="orders" />],
     ['supply', <SupplyTile key="supply" />],
+    ['supply_io', <SupplyHubTile key="supply_io" />],
     [
       'plan',
       <Tile

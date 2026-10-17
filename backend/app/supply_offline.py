@@ -39,6 +39,73 @@ ORDER_QUESTION = re.compile(
     re.I,
 )
 SKIP = {"my", "the", "some", "more", "it", "please", "now", "stock"}
+SHOW_INBOUND = re.compile(
+    r"\b(?:inbound|what came in|what(?:'s| is) coming in|what needs me|order changes?\??$|"
+    r"any (?:new )?(?:orders|changes|forecasts?))\b",
+    re.I,
+)
+ACCEPT_CHANGE = re.compile(r"\b(?:accept|ok|take) (?:the |that )?(?:order )?change\b", re.I)
+DECLINE_CHANGE = re.compile(r"\b(?:decline|reject|refuse) (?:the |that )?(?:order )?change\b", re.I)
+APPROVE_PO = re.compile(
+    r"\bapprove (?:and send )?(?:the |my |that )?(?:po|order|purchase order|draft)\b", re.I
+)
+SEND_ASN = re.compile(r"\b(?:shipping notice|asn|advance ship\w*|ship(?:ment)? notice)\b", re.I)
+SEND_ALL = re.compile(
+    r"\bsend (?:everything|all|the (?:goods )?receipt|what(?:'s| is) (?:pending|left)|"
+    r"(?:the )?pending)\b",
+    re.I,
+)
+SAP_VIEW = re.compile(r"\b(?:sap|idoc)\b", re.I)
+RECEIVED = re.compile(
+    r"\b(?:received|got|came|arrived|delivered)\b.*\b(?:everything|all|except|but|only|order|"
+    r"delivery|goods)\b|\b(?:everything|all) (?:came|arrived|received)\b|\bonly\b.+\b(?:came|"
+    r"arrived)\b",
+    re.I,
+)
+EXCEPT = re.compile(r"\b(?:except|but|minus|short(?: of)?|missing)\s+(.+)$", re.I)
+ONLY = re.compile(r"\bonly\s+(.+?)\s+(?:came|arrived|received)\b", re.I)
+
+
+def _phrases(text: str) -> list[str]:
+    """'5 milk and 2 kg sugar' → ['5 milk', '2 kg sugar']."""
+    parts = re.split(r",|\band\b|&", text.strip(" .!?"), flags=re.I)
+    return [part.strip() for part in parts if re.search(r"\d|\b(?:one|two|five|ten)\b", part)]
+
+
+def io_call(text: str) -> types.Part | None:
+    """Partner documents in and out (supply_io.py)."""
+    if SEND_ALL.search(text):
+        return call("send_pending_documents", {})
+    if SAP_VIEW.search(text) and re.search(r"\b(?:show|view|see|open)\b", text, re.I):
+        kind = next(
+            (
+                word
+                for word in ("shipping notice", "receipt", "change", "forecast", "invoice", "order")
+                if word in text.casefold()
+            ),
+            "",
+        )
+        return call("view_document_as_sap", {"document": kind} if kind else {})
+    if SEND_ASN.search(text) and re.search(r"\b(?:send|share|tell)\b", text, re.I):
+        return call("send_asn", {})
+    if DECLINE_CHANGE.search(text):
+        return call("accept_order_change", {"accept": False})
+    if ACCEPT_CHANGE.search(text):
+        return call("accept_order_change", {})
+    if APPROVE_PO.search(text):
+        return call("approve_and_send_po", {})
+    if RECEIVED.search(text) and not re.search(r"\b(?:did|have|has) (?:i|we|you)\b", text, re.I):
+        args: dict[str, Any] = {}
+        only = ONLY.search(text)
+        short = EXCEPT.search(text)
+        if only:
+            args["received_only"] = _phrases(only.group(1))
+        elif short:
+            args["missing"] = _phrases(short.group(1))
+        return call("record_goods_received", args)
+    if SHOW_INBOUND.search(text):
+        return call("show_inbound", {})
+    return None
 
 
 def call(name: str, args: dict[str, Any]) -> types.Part:
@@ -86,6 +153,9 @@ def rule_args(text: str) -> dict[str, Any]:
 
 def supply_call(question: str, ctx: Any) -> types.Part | None:
     text = question.strip()
+    io = io_call(text)
+    if io is not None:
+        return io
     if ORDER_QUESTION.search(text):
         return call("get_purchase_orders", {})
     if RULES_QUESTION.search(text) and not RULE_WORDS.search(text.replace("rules", "")):
@@ -132,7 +202,78 @@ def supplier_named(text: str, ctx: Any) -> str:
     return str(rows[0]["supplier"]["name"]) if rows else ""
 
 
+def _qty(row: dict[str, Any]) -> str:
+    return f"{float(row['quantity']):g} {row['unit']} {row['item']}"
+
+
+def io_reply(name: str, result: dict[str, Any]) -> str | None:
+    status = result.get("status")
+    demo = " (simulated: demo partner)" if result.get("demo_partner") else ""
+    if name == "show_inbound":
+        docs = result.get("documents") or []
+        if not docs:
+            return "Offline coach: nothing has come in from partners yet."
+        latest = docs[0]
+        waiting = len(result.get("needs_you") or [])
+        tail = f" {waiting} thing{'s' if waiting != 1 else ''} need you." if waiting else ""
+        return (
+            f"Offline coach: latest in: {latest['what']} {latest['number']} from "
+            f"{latest['from']} ({latest['status'].replace('_', ' ')}).{tail}"
+        )
+    if name == "accept_order_change":
+        if status not in {"accepted", "declined"}:
+            return "Offline coach: no order change is waiting for you."
+        return (
+            f"Offline coach: change {status} for order {result['number']} from "
+            f"{result['partner']}: now {', '.join(_qty(x) for x in result['lines'])}."
+        )
+    if name == "approve_and_send_po":
+        if status == "rules_broken":
+            return "Offline coach: a supplier rule is broken; fix it on the card first."
+        if status != "sent":
+            return "Offline coach: there is no drafted order to approve."
+        return f"Offline coach: PO {result['po_number']} approved and sent to {result['supplier']}."
+    if name == "record_goods_received":
+        if status not in {"receipt_sent", "receipt_ready"}:
+            return "Offline coach: no delivery is open. Which order arrived?"
+        short = result.get("short") or []
+        missing = f" Short: {', '.join(_qty(x) for x in short)}." if short else " All received."
+        sent = (
+            f" Goods receipt sent to {result['partner']}{demo}."
+            if status == "receipt_sent"
+            else " The goods receipt is ready to send."
+        )
+        stock = " Confirm the stock update on the card." if result.get("proposal_id") else ""
+        return f"Offline coach: order {result['number']} received.{missing}{sent}{stock}"
+    if name == "send_asn":
+        if status == "change_waiting":
+            return "Offline coach: the partner changed this order; accept the change first."
+        if status != "sent":
+            return "Offline coach: no order is waiting to ship."
+        return (
+            f"Offline coach: shipping notice {result['asn_number']} sent to "
+            f"{result['partner']}{demo} for {', '.join(_qty(x) for x in result['lines'])}."
+        )
+    if name == "send_pending_documents":
+        rows = result.get("sent") or []
+        if not rows:
+            return "Offline coach: everything is already sent."
+        return "Offline coach: sent " + "; ".join(f"{x['what']} to {x['to']}" for x in rows) + "."
+    if name == "view_document_as_sap":
+        if status != "shown":
+            return "Offline coach: which order's document should I show?"
+        kind = f" ({result['idoc_type']})" if result.get("idoc_type") else ""
+        return (
+            f"Offline coach: here is the {result['what']} for {result['number']} as SAP sees "
+            f"it{kind}."
+        )
+    return None
+
+
 def supply_reply(name: str, result: dict[str, Any]) -> str | None:
+    io = io_reply(name, result)
+    if io is not None:
+        return io
     if name == "draft_reorder":
         if result.get("status") not in {"needs_owner_tap", "sent_automatically"}:
             return "Offline coach: tell me which item to reorder and I'll draft the order."

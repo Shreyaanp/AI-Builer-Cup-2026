@@ -39,6 +39,14 @@
         { "fieldPath": "scope", "order": "ASCENDING" },
         { "fieldPath": "created", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "supply_inbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "scope", "order": "ASCENDING" },
+        { "fieldPath": "created", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

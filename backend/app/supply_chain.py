@@ -73,7 +73,8 @@ log = structlog.get_logger()
 RULES = "supply_rules"
 ORDERS = "supply_po"
 SEQUENCE = "supply_seq"
-assert (RULES, ORDERS, SEQUENCE) == SUPPLY_KINDS  # erased with the shop (merchant.py)
+INBOX = "supply_inbox"  # partner documents (supply_io.py)
+assert (RULES, ORDERS, SEQUENCE, INBOX) == SUPPLY_KINDS  # erased with the shop (merchant.py)
 COVER_DAYS = 7
 MAX_DOCUMENTS = 12
 MAX_ORDERS = 100
@@ -500,6 +501,7 @@ async def draft_reorder(
             "wanted": round(wanted, 2),
             "owner_quantity": bool(quantity),
             "tier_min": best["tier_min"],
+            "moq": best["moq"],
             "on_time": best["on_time"],
             "headroom": best["headroom"],
             "options": len(options),
@@ -633,6 +635,7 @@ def quote(
         "fits_credit": headroom is None or headroom >= total,
         "headroom": headroom,
         "tier_min": tier_min,
+        "moq": rule.moq if rule else 0,
     }
 
 
@@ -1239,9 +1242,6 @@ def receive(
 ) -> dict[str, Any]:
     """Goods arrived: the order is marked received and the stock update goes to the usual
     review (the owner confirms it before the menu changes)."""
-    from .merchant import ProposalRequest
-    from .sourcing import convert, matches
-
     context = _owned(store, uid, bid)
     po = get_po(store, uid, bid, po_id)
     _check_version(po, version)
@@ -1249,9 +1249,36 @@ def receive(
         raise HTTPException(409, "Nothing is on its way.")
     if open_flags(po):
         raise HTTPException(409, "RESOLVE_FLAGS")
+    amounts = {
+        line["line"]: float(line.get("shipped", line.get("confirmed", line["quantity"])))
+        for line in po["lines"]
+    }
+    changed, proposal = restock(store, uid, bid, context, po, amounts)
+    po["received"] = True
+    po["received_at"] = time.time()
+    po["received_stock"] = {name: product.stock for name, product in changed.items()}
+    if po["status"] == "dispatched":
+        po["status"] = "received"
+    saved = _save(store, bid, po)
+    return {"order": saved, "proposal": proposal}
+
+
+def restock(
+    store: MerchantRepository,
+    uid: str,
+    bid: str,
+    context: dict[str, Any],
+    po: dict[str, Any],
+    amounts: dict[int, float],
+) -> tuple[dict[str, ProductFields], dict[str, Any] | None]:
+    """The stock update for goods that came in, prepared for the owner's usual review (the
+    menu changes only when they confirm it). amounts: received quantity per order line."""
+    from .merchant import ProposalRequest
+    from .sourcing import convert, matches
+
     changed: dict[str, ProductFields] = {}
     for line in po["lines"]:
-        amount_in = float(line.get("shipped", line.get("confirmed", line["quantity"])))
+        amount_in = float(amounts.get(line["line"], 0))
         if not amount_in:
             continue
         for product in context["inventory"]:
@@ -1286,12 +1313,7 @@ def receive(
                 products=list(changed.values()),
             ),
         )
-    po["received"] = True
-    po["received_at"] = time.time()
-    if po["status"] == "dispatched":
-        po["status"] = "received"
-    saved = _save(store, bid, po)
-    return {"order": saved, "proposal": proposal}
+    return changed, proposal
 
 
 # ---------------------------------------------------------------------------------------------

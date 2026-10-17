@@ -1,3 +1,4 @@
+import { CloseDaySupply } from '../supply/SupplyEntry'
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -301,6 +302,7 @@ export function CloseDay({
       <Box sx={{ px: 4, pb: 4, flex: 1, overflowY: 'auto' }}>
         {phase === 'capture' && (
           <>
+            <CloseDaySupply />
             <Typography color="text.secondary" sx={{ animation: `cdRise 400ms ${EASE} both` }}>
               {t.intro}
             </Typography>

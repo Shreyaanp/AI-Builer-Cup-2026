@@ -406,7 +406,7 @@ def demo_product_id(bid: str, product: ProductFields) -> str:
 
 PROPOSAL_SECONDS = 600
 # Supply-chain records (supply_chain.py) kept in feature_docs; erased with the shop.
-SUPPLY_KINDS = ("supply_rules", "supply_po", "supply_seq")
+SUPPLY_KINDS = ("supply_rules", "supply_po", "supply_seq", "supply_inbox")
 CHALLENGE_SECONDS = 90
 
 

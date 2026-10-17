@@ -4,17 +4,21 @@ import { useWorkspace } from '../v1/workspaceContext'
 import { useSupplyCopy } from './copy'
 import type { PurchaseOrder, Relationship, RuleSet } from './types'
 
+interface SupplyOverview {
+  suppliers: Relationship[]
+  orders: PurchaseOrder[]
+  needs?: { item: string; runs_out: string; stock: number }[]
+}
+
 /** The shop's supplier relationships and purchase orders (newest first). */
 export function useSupply(open: boolean) {
-  const { api, activeId } = useWorkspace()
-  const [data, setData] = useState<{
-    suppliers: Relationship[]
-    orders: PurchaseOrder[]
-  } | null>(null)
+  const { api, activeId, active } = useWorkspace()
+  const [loaded, setLoaded] = useState<{ id: string; data: SupplyOverview } | null>(null)
   const refresh = useCallback(async () => {
     if (!activeId) return
     try {
-      setData(await api(`/businesses/${encodeURIComponent(activeId)}/supply`))
+      const data = await api<SupplyOverview>(`/businesses/${encodeURIComponent(activeId)}/supply`)
+      setLoaded({ id: activeId, data })
     } catch {
       // Keep what is shown; the next refresh tries again.
     }
@@ -24,8 +28,8 @@ export function useSupply(open: boolean) {
     // Async on purpose: the list arrives after this effect, never synchronously inside it.
     const first = window.setTimeout(() => void refresh(), 0)
     return () => window.clearTimeout(first)
-  }, [open, refresh])
-  return { data, refresh }
+  }, [open, refresh, active?.revision])
+  return { data: loaded?.id === activeId ? loaded.data : null, refresh }
 }
 
 export type SimVariant = 'full' | 'partial' | 'substitute' | 'match' | 'price_mismatch'

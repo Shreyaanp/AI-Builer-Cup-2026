@@ -38,10 +38,34 @@ from .settings import Settings
 
 log = structlog.get_logger()
 
-Kind = Literal["ORDERS", "ORDRSP", "DESADV", "INVOIC"]
+Kind = Literal["ORDERS", "ORDRSP", "DESADV", "INVOIC", "FORECAST", "ORDER_CHANGE", "RECEIPT"]
 Format = Literal["idoc", "csv", "text", "json"]
 LineStatus = Literal["accepted", "changed", "backordered", "substituted", "rejected"]
+# The purchase-order loop with a supplier (supply_chain.py).
 KINDS: tuple[Kind, ...] = ("ORDERS", "ORDRSP", "DESADV", "INVOIC")
+# Inbound from partners and the shop's goods receipt (supply_io.py).
+IO_KINDS: tuple[Kind, ...] = ("FORECAST", "ORDER_CHANGE", "RECEIPT")
+ALL_KINDS: tuple[Kind, ...] = (*KINDS, *IO_KINDS)
+# Documents the buying side sends; the rest come from the supplier.
+FROM_BUYER = {"ORDERS", "ORDER_CHANGE", "FORECAST", "RECEIPT"}
+# SAP message types (EDI_DC40-MESTYP) where they differ from our names: an order change,
+# a delivery schedule (forecast) and a proof of delivery (goods receipt).
+MESSAGE_TYPES = {"ORDER_CHANGE": "ORDCHG", "FORECAST": "DELINS", "RECEIPT": "STPPOD"}
+KIND_ALIASES = {
+    **{value: key for key, value in MESSAGE_TYPES.items()},
+    "DELFOR": "FORECAST",
+    "RECADV": "RECEIPT",
+    "GOODS_RECEIPT": "RECEIPT",
+    "ASN": "DESADV",
+}
+
+
+def kind_of(value: str) -> str:
+    """Our document kind for a code as a partner's system writes it (ORDCHG, DELFOR…)."""
+    code = (value or "").strip().upper()
+    return KIND_ALIASES.get(code, code)
+
+
 FORMATS: tuple[Format, ...] = ("idoc", "csv", "text", "json")
 MAX_TEXT = 60_000
 # A slow model read falls back to the parsers instead of holding the request.
@@ -135,6 +159,8 @@ class DocLine(BaseModel):
     backorder_quantity: float = Field(default=0, ge=0, le=1_000_000)
     backorder_date: str = Field(default="", max_length=10)
     substitute_for: str = Field(default="", max_length=120)
+    # Goods receipt: what the order or shipping notice said would come (quantity = received).
+    expected: float | None = Field(default=None, ge=0, le=1_000_000)
 
 
 class SupplyDoc(BaseModel):
@@ -243,7 +269,14 @@ def _segment(parent: ET.Element, tag: str, fields: list[tuple[str, str]]) -> ET.
     return node
 
 
-BASIC_TYPES = {"ORDERS": "ORDERS05", "ORDRSP": "ORDERS05", "DESADV": "DELVRY07"}
+BASIC_TYPES = {
+    "ORDERS": "ORDERS05",
+    "ORDRSP": "ORDERS05",
+    "ORDER_CHANGE": "ORDERS05",
+    "DESADV": "DELVRY07",
+    "RECEIPT": "DELVRY07",
+    "FORECAST": "DELFOR02",
+}
 
 
 def control_record(doc: SupplyDoc, docnum: str, outbound_from_supplier: bool) -> list[tuple]:
@@ -257,7 +290,7 @@ def control_record(doc: SupplyDoc, docnum: str, outbound_from_supplier: bool) ->
         ("DOCNUM", docnum.zfill(16)),
         ("DIRECT", "1"),
         ("IDOCTYP", basic),
-        ("MESTYP", doc.kind),
+        ("MESTYP", MESSAGE_TYPES.get(doc.kind, doc.kind)),
         ("SNDPOR", "SAPS4H" if sender.system == "idoc" else "CHALKBRD"),
         ("SNDPRT", "LS"),
         ("SNDPRN", (sender.id or "SENDER")[:10].upper()),
@@ -274,11 +307,11 @@ def idoc_xml(doc: SupplyDoc) -> str:
     basic = BASIC_TYPES.get(doc.kind, "INVOIC02")
     root = ET.Element(basic)
     idoc = _sub(root, "IDOC", BEGIN="1")
-    from_supplier = doc.kind != "ORDERS"
+    from_supplier = doc.kind not in FROM_BUYER
     docnum = re.sub(r"\D", "", doc.number) or "1"
     _segment(idoc, "EDI_DC40", control_record(doc, docnum, from_supplier))
     cur = doc.currency
-    if doc.kind == "DESADV":
+    if doc.kind in {"DESADV", "RECEIPT"}:
         head = _segment(
             idoc,
             "E1EDL20",
@@ -289,7 +322,9 @@ def idoc_xml(doc: SupplyDoc) -> str:
                 ("GEWEI", "KGM"),
             ],
         )
-        _segment(head, "E1EDT13", [("QUALF", "007"), ("NTANF", sap_date(doc.delivery))])
+        # 007: delivery date; 015: proof of delivery (the day the goods were received).
+        qualifier = "015" if doc.kind == "RECEIPT" else "007"
+        _segment(head, "E1EDT13", [("QUALF", qualifier), ("NTANF", sap_date(doc.delivery))])
         _segment(head, "E1ADRM1", [("PARTNER_Q", "WE"), ("NAME1", doc.buyer.name[:35])])
         _segment(head, "E1ADRM1", [("PARTNER_Q", "LF"), ("NAME1", doc.supplier.name[:35])])
         for line in doc.lines:
@@ -314,11 +349,27 @@ def idoc_xml(doc: SupplyDoc) -> str:
                     ("IDTNR", line.buyer_code),
                 ],
             )
+            if doc.kind == "RECEIPT" and line.expected is not None:
+                # Proof-of-delivery difference: what was announced, and the reason code.
+                short = round(line.expected - line.quantity, 3)
+                _segment(
+                    item,
+                    "E1EDL15",
+                    [
+                        ("GRUND", "SHRT" if short > 0 else "OVER" if short < 0 else ""),
+                        ("PODMG", qty_text(line.expected)),
+                    ],
+                )
+        return _pretty(root)
+    if doc.kind == "FORECAST":
+        from .supply_forecast import write_forecast
+
+        write_forecast(idoc, doc)
         return _pretty(root)
     head_fields = [("CURCY", cur), ("BELNR", doc.number)]
     if doc.terms_days is not None:
         head_fields.append(("ZTERM", TERMS_KEYS.get(doc.terms_days, f"NT{doc.terms_days:02d}")))
-    if doc.kind == "ORDRSP":
+    if doc.kind in {"ORDRSP", "ORDER_CHANGE"}:
         head_fields.insert(0, ("ACTION", "000" if all_accepted(doc) else "002"))
     _segment(idoc, "E1EDK01", head_fields)
     if doc.kind == "INVOIC" and doc.terms_days is not None:
@@ -345,7 +396,9 @@ def idoc_xml(doc: SupplyDoc) -> str:
     for line in doc.lines:
         fields = [
             ("POSEX", str(line.line).zfill(5)),
-            ("ACTION", LINE_ACTIONS.get(line.status, "002")) if doc.kind == "ORDRSP" else ("", ""),
+            ("ACTION", LINE_ACTIONS.get(line.status, "002"))
+            if doc.kind in {"ORDRSP", "ORDER_CHANGE"}
+            else ("", ""),
             ("MENGE", qty_text(line.quantity)),
             ("MENEE", unit_code(line.unit)),
             ("VPREI", major_text(line.price, cur)),
@@ -363,7 +416,7 @@ def idoc_xml(doc: SupplyDoc) -> str:
         if line.substitute_for:
             sub = _segment(item, "E1EDPT1", [("TDID", "Z001")])
             _segment(sub, "E1EDPT2", [("TDLINE", f"Substitute for {line.substitute_for}"[:70])])
-        if doc.kind in {"ORDERS", "ORDRSP"}:
+        if doc.kind in {"ORDERS", "ORDRSP", "ORDER_CHANGE"}:
             if line.quantity:
                 _segment(
                     item,
@@ -410,7 +463,7 @@ def _text(node: ET.Element | None, tag: str) -> str:
 
 
 def parse_idoc(text: str) -> SupplyDoc:
-    """Read an IDoc XML of any of the four kinds. Raises ValueError when it is not one."""
+    """Read an IDoc XML of any kind we exchange. Raises ValueError when it is not one."""
     if "<!DOCTYPE" in text or "<!ENTITY" in text:
         raise ValueError("IDoc must not declare entities")
     try:
@@ -421,20 +474,24 @@ def parse_idoc(text: str) -> SupplyDoc:
     control = idoc.find("EDI_DC40") if idoc is not None else None
     if idoc is None or control is None:
         raise ValueError("no IDOC/EDI_DC40 control record")
-    kind = _text(control, "MESTYP")
-    if kind not in KINDS:
+    kind = kind_of(_text(control, "MESTYP"))
+    if kind not in ALL_KINDS:
         raise ValueError(f"unsupported message type {kind or '?'}")
     sender = Party(id=_text(control, "SNDPRN").lower(), system="idoc")
-    if kind == "DESADV":
+    if kind == "FORECAST":
+        from .supply_forecast import read_forecast
+
+        return read_forecast(idoc, control)
+    if kind in {"DESADV", "RECEIPT"}:
         head = idoc.find("E1EDL20")
         if head is None:
-            raise ValueError("DESADV without E1EDL20")
+            raise ValueError(f"{kind} without E1EDL20")
         names = {_text(p, "PARTNER_Q"): _text(p, "NAME1") for p in head.findall("E1ADRM1")}
         deadline = next(
             (
                 _text(t, "NTANF")
                 for t in head.findall("E1EDT13")
-                if _text(t, "QUALF") in {"007", "006"}
+                if _text(t, "QUALF") in {"007", "006", "015"}
             ),
             "",
         )
@@ -444,6 +501,7 @@ def parse_idoc(text: str) -> SupplyDoc:
             refs = item.find("E1EDL41")
             ref = ref or _text(refs, "BSTNR")
             posex = _text(refs, "POSEX") or _text(item, "POSNR")
+            pod = _text(item.find("E1EDL15"), "PODMG")
             lines.append(
                 DocLine(
                     line=int(posex or len(lines) * 10 + 10),
@@ -452,17 +510,21 @@ def parse_idoc(text: str) -> SupplyDoc:
                     buyer_code=_text(refs, "IDTNR"),
                     quantity=number(_text(item, "LFIMG")) or 0,
                     unit=_text(item, "VRKME"),
+                    expected=number(pod) if pod else None,
                 )
             )
+        receipt = kind == "RECEIPT"
         return SupplyDoc(
-            kind="DESADV",
+            kind=kind,
             number=_text(head, "VBELN") or "?",
             ref=ref,
             issued=from_sap_date(_text(control, "CREDAT")),
             delivery=from_sap_date(deadline),
             currency="XXX",
-            buyer=Party(name=names.get("WE", "")),
-            supplier=Party(id=sender.id, name=names.get("LF", ""), system="idoc"),
+            buyer=Party(id=sender.id if receipt else "", name=names.get("WE", "")),
+            supplier=Party(
+                id="" if receipt else sender.id, name=names.get("LF", ""), system="idoc"
+            ),
             lines=lines,
         )
     head = idoc.find("E1EDK01")
@@ -536,11 +598,10 @@ def parse_idoc(text: str) -> SupplyDoc:
         ),
         None,
     )
-    sent_by_supplier = kind != "ORDERS"
     return SupplyDoc(
         kind=kind,
         number=_text(head, "BELNR") or "?",
-        ref=ref if sent_by_supplier else "",
+        ref=ref if kind != "ORDERS" else "",
         issued=from_sap_date(dates.get("012") or _text(control, "CREDAT")),
         delivery=from_sap_date(dates.get("002", "")),
         currency=currency,
@@ -578,6 +639,9 @@ CSV_COLUMNS = [
     "backorder_qty",
     "backorder_date",
     "substitute_for",
+    "expected_qty",
+    "buyer",
+    "supplier",
 ]
 
 
@@ -621,6 +685,9 @@ def csv_text(doc: SupplyDoc) -> str:
                 qty_text(line.backorder_quantity) if line.backorder_quantity else "",
                 line.backorder_date,
                 line.substitute_for,
+                qty_text(line.expected) if line.expected is not None else "",
+                doc.buyer.name,
+                doc.supplier.name,
             ]
         )
     return out.getvalue()
@@ -631,8 +698,8 @@ def parse_csv(text: str) -> SupplyDoc:
     if not rows or "doc_type" not in rows[0]:
         raise ValueError("CSV needs a header with doc_type")
     first = rows[0]
-    kind = (first.get("doc_type") or "").strip().upper()
-    if kind not in KINDS:
+    kind = kind_of(first.get("doc_type") or "")
+    if kind not in ALL_KINDS:
         raise ValueError(f"unsupported doc_type {kind or '?'}")
     currency = (first.get("currency") or "XXX").strip().upper()[:3]
     lines = []
@@ -652,11 +719,14 @@ def parse_csv(text: str) -> SupplyDoc:
                 backorder_quantity=number(row.get("backorder_qty")) or 0,
                 backorder_date=(row.get("backorder_date") or "").strip()[:10],
                 substitute_for=(row.get("substitute_for") or "").strip()[:120],
+                expected=number(row.get("expected_qty")) if row.get("expected_qty") else None,
             )
         )
     totals = [line.total for line in lines]
     return SupplyDoc(
         kind=kind,
+        buyer=Party(name=(first.get("buyer") or "").strip()[:120]),
+        supplier=Party(name=(first.get("supplier") or "").strip()[:120]),
         number=(first.get("doc_number") or "?").strip()[:40],
         ref=(first.get("po_ref") or "").strip()[:40],
         issued=(first.get("doc_date") or "").strip()[:10],
@@ -676,6 +746,9 @@ TITLES = {
     "ORDRSP": "Order confirmation",
     "DESADV": "Dispatched",
     "INVOIC": "Invoice",
+    "FORECAST": "Forecast",
+    "ORDER_CHANGE": "Order change",
+    "RECEIPT": "Goods received",
 }
 
 
@@ -711,9 +784,13 @@ def text_message(doc: SupplyDoc) -> str:
             row += f" (instead of {line.substitute_for})"
         elif line.status == "rejected":
             row += " (not available)"
+        if line.expected is not None and line.expected != line.quantity:
+            row += f" (expected {qty_text(line.expected)})"
         rows.append(row)
     if doc.delivery:
-        verb = "Delivery" if doc.kind != "DESADV" else "Arriving"
+        verb = {"DESADV": "Arriving", "RECEIPT": "Received on", "FORECAST": "Needed by"}.get(
+            doc.kind, "Delivery"
+        )
         rows.append(f"{verb}: {human_date(doc.delivery)}")
     if doc.total is not None:
         rows.append(f"Total {money_words(doc.total, doc.currency)}")
@@ -806,6 +883,7 @@ def parse_text(text: str, today: date | None = None) -> tuple[SupplyDoc, list[st
                 status, sub = "substituted", instead.group(1).strip()
             if re.search(r"not available|out of stock|no stock", rest, re.I):
                 status = "rejected"
+            announced = re.search(r"expected\s+(\d+(?:[.,]\d+)?)", rest, re.I)
             price = minor_of(match.group(7), currency) if match.group(7) else None
             quantity = number(match.group(4)) or 0
             lines.append(
@@ -821,10 +899,13 @@ def parse_text(text: str, today: date | None = None) -> tuple[SupplyDoc, list[st
                     backorder_quantity=back_qty,
                     backorder_date=back_date,
                     substitute_for=sub,
+                    expected=number(announced.group(1)) if announced else None,
                 )
             )
             continue
-        when = re.match(r"(?:delivery|arriving|deliver on|eta)\s*:?\s*(.+)$", row, re.I)
+        when = re.match(
+            r"(?:delivery|arriving|deliver on|eta|received on|needed by)\s*:?\s*(.+)$", row, re.I
+        )
         if when:
             delivery, sure = text_date(when.group(1), today.year)
             if not sure:

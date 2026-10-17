@@ -1,9 +1,14 @@
-"""Coach tools for the supply chain: supplier rules and forecast-drafted purchase orders.
+"""Coach tools for the supply chain: supplier rules, forecast-drafted purchase orders, and the
+documents exchanged with partners (inbound orders, changes, forecasts; outbound goods receipts
+and shipping notices).
 
-Like every coach tool they only read and prepare: a rule change and a purchase order each wait
-for the owner's tap on their card (supply_chain.py does the work).
+Rule changes and drafted orders wait for the owner's tap on their card (supply_chain.py does
+the work). The partner-document tools act only when the owner asks for that action itself
+("send the shipping notice", "received everything except 5 milk"), and their card shows what
+went out (supply_io.py does the work).
 """
 
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -189,10 +194,446 @@ def get_purchase_orders() -> dict[str, Any]:
     return {"orders": [supply_chain.summary(po) for po in found[:8]]}
 
 
+# ---------------------------------------------------------------------------------------------
+# Inbound and outbound with partners (supply_io.py)
+
+KIND_WORDS = {
+    "FORECAST": "forecast",
+    "ORDERS": "new order",
+    "ORDER_CHANGE": "order change",
+    "ORDRSP": "order confirmation",
+    "DESADV": "shipping notice",
+    "INVOIC": "invoice",
+    "RECEIPT": "goods receipt",
+}
+DOCUMENT_WORDS = {
+    "forecast": "FORECAST",
+    "order": "ORDERS",
+    "new order": "ORDERS",
+    "purchase order": "ORDERS",
+    "po": "ORDERS",
+    "change": "ORDER_CHANGE",
+    "order change": "ORDER_CHANGE",
+    "confirmation": "ORDRSP",
+    "shipping notice": "DESADV",
+    "asn": "DESADV",
+    "dispatch": "DESADV",
+    "invoice": "INVOIC",
+    "receipt": "RECEIPT",
+    "goods receipt": "RECEIPT",
+}
+# Spoken quantities ("five milk", "paanch doodh"); the model usually sends digits.
+NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "twelve": 12,
+    "fifteen": 15,
+    "twenty": 20,
+    "ek": 1,
+    "teen": 3,
+    "char": 4,
+    "paanch": 5,
+    "panch": 5,
+    "das": 10,
+}
+UNIT_NOISE = re.compile(
+    r"\d+(?:[.,]\d+)?|\b(?:kg|kgs|g|l|litres?|liters?|ltr|pcs?|pieces?|packs?|of)\b"
+)
+RECEIVABLE = {"sent", "changed", "confirmed", "dispatched", "invoiced", "received"}
+
+
+def _supply_card(
+    ctx: MerchantContext, view: str, order: dict[str, Any] | None = None, **extra: Any
+) -> str:
+    from . import supply_chain, supply_outbound
+
+    context = supply_chain._owned(ctx.store, ctx.uid, ctx.business_id or "")
+    data = {
+        "view": view,
+        "order": supply_outbound.view(order, supply_chain.shop_today(context)) if order else None,
+        **extra,
+    }
+    return _card(ctx, "supply", data)
+
+
+def _plain_order(po: dict[str, Any]) -> dict[str, Any]:
+    from . import supply_io
+
+    partner = supply_io.partner_of(po)
+    return {
+        "order_id": po["id"],
+        "number": po["number"],
+        "partner": partner["name"],
+        "demo_partner": bool(partner.get("demo")),
+        "goods": "coming in to the shop"
+        if supply_io.direction_of(po) == "in"
+        else "the shop ships them to the partner",
+        "lines": [
+            {"item": line["item"], "quantity": line["quantity"], "unit": line["unit"]}
+            for line in po["lines"]
+        ],
+        "deliver_on": po.get("delivery", ""),
+        "status": po["status"],
+    }
+
+
+def _find_order(
+    ctx: MerchantContext,
+    order: str,
+    fits: Callable[[dict[str, Any]], bool],
+    item: str = "",
+) -> dict[str, Any] | None:
+    """An order by id, number, partner or item; else the newest one that fits."""
+    from . import supply_chain, supply_io
+    from .sourcing import matches
+
+    rows = [po for po in supply_chain.orders(ctx.store, ctx.uid, ctx.business_id or "") if fits(po)]
+    wanted = (order or "").strip()
+    if wanted:
+        lowered = wanted.casefold()
+        for po in rows:
+            if (
+                po["id"] == wanted
+                or po["number"] == wanted
+                or lowered in supply_io.partner_of(po)["name"].casefold()
+                or any(matches(line["item"], lowered) for line in po["lines"])
+            ):
+                return po
+        return None
+    if item:
+        for po in rows:
+            if any(matches(x["item"], item) or matches(item, x["item"]) for x in po["lines"]):
+                return po
+    return rows[0] if rows else None
+
+
+def _amounts(phrases: list[str] | None, po: dict[str, Any]) -> dict[int, float]:
+    """'5 milk', '5 l milk', 'milk 5', 'five milk' → {line: 5} for the matching order line."""
+    from .sourcing import matches
+
+    found: dict[int, float] = {}
+    for phrase in phrases or []:
+        text = phrase.strip().casefold()
+        for word, value in NUMBER_WORDS.items():
+            text = re.sub(rf"\b{word}\b", str(value), text)
+        amount = re.search(r"\d+(?:[.,]\d+)?", text)
+        if not amount:
+            continue
+        name = " ".join(UNIT_NOISE.sub(" ", text).split())
+        for line in po["lines"]:
+            names = [line["item"], line.get("partner_item") or "", line.get("product") or ""]
+            if not name or any(n and (matches(n, name) or matches(name, n)) for n in names):
+                found[line["line"]] = float(amount.group(0).replace(",", "."))
+                break
+    return found
+
+
+def show_inbound(kind: str = "") -> dict[str, Any]:
+    """What partners sent the shop, newest first: forecasts, new orders, order changes,
+    confirmations, shipping notices and invoices, with what each changed and its status (new,
+    needs_you, done, problem), plus what needs the owner now. Use it for "show me today's
+    inbound", "what came in?", "any order changes?" or "what needs me?". kind: forecast, order,
+    change or empty for all. Say the first two or three in plain words (never IDoc codes) and
+    name what needs the owner; the app shows them as cards."""
+    from . import supply_outbound
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    board = supply_outbound.board(ctx.store, ctx.uid, ctx.business_id)
+    want = DOCUMENT_WORDS.get((kind or "").strip().casefold(), "")
+    entries = [e for e in board["inbox"] if not want or e["kind"] == want][:6]
+    return {
+        "documents": [
+            {
+                "what": KIND_WORDS.get(e["kind"], e["kind"]),
+                "from": (e.get("partner") or {}).get("name", "unknown partner"),
+                "demo_partner": bool((e.get("partner") or {}).get("demo")),
+                "number": e["number"],
+                "status": e["status"],
+                "problem": e.get("problem") or None,
+                "changes": e.get("changes", [])[:4],
+                "lines": e.get("lines", [])[:3],
+            }
+            for e in entries
+        ],
+        "needs_you": [
+            {
+                k: v
+                for k, v in task.items()
+                if k in {"code", "partner", "number", "short", "problem"}
+            }
+            for task in board["tasks"][:5]
+        ],
+        "card_id": _supply_card(ctx, "coming" if entries else "needs"),
+    }
+
+
+def accept_order_change(order: str = "", accept: bool = True) -> dict[str, Any]:
+    """Accept (or with accept=false decline) a partner's order change, or a supplier's changed
+    confirmation, that waits for the owner: "accept the change", "OK, take 15". order: number,
+    partner or item if the owner named one; empty for the one waiting."""
+    from . import supply_io
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    po = _find_order(
+        ctx, order, lambda p: bool(p.get("pending_change")) or p["status"] == "changed"
+    )
+    if po is None:
+        return {"status": "nothing_waiting", "instruction": "Say no order change is waiting."}
+    changes = (po.get("pending_change") or {}).get("changes") or po.get("changes") or []
+    try:
+        saved = supply_io.accept_change(
+            ctx.store, ctx.uid, ctx.business_id, po["id"], po["version"], accept
+        )
+    except HTTPException as error:
+        return _invalid(error, ctx)
+    return {
+        **_plain_order(saved),
+        "status": "accepted" if accept else "declined",
+        "changes": changes,
+        "card_id": _supply_card(ctx, "order", saved),
+    }
+
+
+def approve_and_send_po(order: str = "") -> dict[str, Any]:
+    """Approve a drafted purchase order and send it to the supplier in the supplier's format
+    (SAP IDoc, CSV, chat text or JSON) when the owner says so: "approve it", "send the flour
+    order". order: number, supplier or item; empty for the newest draft. If a rule is broken
+    (below MOQ, over credit), name it and point to the fix on the card: nothing is sent."""
+    from . import supply_chain
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    po = _find_order(ctx, order, lambda p: p["status"] == "draft")
+    if po is None:
+        return {"status": "no_draft", "instruction": "Say no order waits; offer draft_reorder."}
+    if po.get("blocked"):
+        return {
+            **supply_chain.summary(po),
+            "status": "rules_broken",
+            "card_id": _card(ctx, "purchase_order", po),
+        }
+    try:
+        saved = supply_chain.approve(ctx.store, ctx.uid, ctx.business_id, po["id"], po["version"])
+    except HTTPException as error:
+        return _invalid(error, ctx)
+    return {
+        **supply_chain.summary(saved),
+        "status": "sent",
+        "card_id": _card(ctx, "purchase_order", saved),
+    }
+
+
+def record_goods_received(
+    order: str = "",
+    missing: list[str] | None = None,
+    received_only: list[str] | None = None,
+    send: bool = True,
+) -> dict[str, Any]:
+    """Record a delivery that arrived and send the goods receipt to the supplier. Everything on
+    the order counts as received except what the owner says: "received everything except 5
+    milk" → missing=["5 milk"]; "only 10 kg flour came" → received_only=["10 flour"]; "all
+    received" → neither. order: number, supplier or item if named. send=false only if the owner
+    wants to check the receipt first. The stock update still waits for their tap on the review
+    card. In one line: what came, what was short, that the receipt went to the supplier."""
+    from . import supply_io, supply_outbound
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    named = " ".join(missing or received_only or [])
+    po = _find_order(
+        ctx,
+        order,
+        lambda p: (
+            supply_io.direction_of(p) == "in"
+            and p["status"] in RECEIVABLE
+            and not supply_io._sent(p, "RECEIPT")
+        ),
+        " ".join(UNIT_NOISE.sub(" ", named.casefold()).split()),
+    )
+    if po is None:
+        return {
+            "status": "nothing_to_receive",
+            "instruction": "Say no delivery is open; ask which order arrived.",
+        }
+    want = supply_outbound.expected(po)
+    received = {line: max(0.0, want[line] - qty) for line, qty in _amounts(missing, po).items()}
+    received.update(_amounts(received_only, po))
+    try:
+        result = supply_outbound.record_receipt(
+            ctx.store, ctx.uid, ctx.business_id, po["id"], po["version"], received
+        )
+        saved = result["order"]
+        if send:
+            saved = supply_outbound.send(
+                ctx.store,
+                ctx.uid,
+                ctx.business_id,
+                saved["id"],
+                saved["version"],
+                result["document"]["id"],
+            )
+    except HTTPException as error:
+        return _invalid(error, ctx)
+    proposal = result.get("proposal")
+    if proposal:
+        ctx.proposals[proposal["id"]] = proposal
+    return {
+        **_plain_order(saved),
+        "status": "receipt_sent" if send else "receipt_ready",
+        "received": [
+            {
+                "item": line["item"],
+                "quantity": received.get(line["line"], want[line["line"]]),
+                "unit": line["unit"],
+            }
+            for line in saved["lines"]
+        ],
+        "short": result["document"]["short"],
+        "receipt_number": result["document"]["number"],
+        "receipt_format": result["document"]["translated_format"],
+        **({"proposal_id": proposal["id"]} if proposal else {}),
+        "card_id": _supply_card(ctx, "order", saved),
+    }
+
+
+def send_asn(order: str = "") -> dict[str, Any]:
+    """Send the shipping notice (advance ship notice, ASN) for goods the shop ships to a
+    partner, written in the partner's format (SAP DELVRY07 for SAP partners): "send the
+    shipping notice", "tell Harbour Café it is on its way". order: number, partner or item."""
+    from . import supply_io, supply_outbound
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    po = _find_order(
+        ctx,
+        order,
+        lambda p: (
+            supply_io.direction_of(p) == "out"
+            and p["status"] not in supply_io.CLOSED
+            and not supply_io._sent(p, "DESADV")
+        ),
+    )
+    if po is None:
+        return {"status": "nothing_to_ship", "instruction": "Say no order is waiting to ship."}
+    if po.get("pending_change"):
+        return {
+            **_plain_order(po),
+            "status": "change_waiting",
+            "instruction": "Say the partner changed this order: accept the change first.",
+            "card_id": _supply_card(ctx, "order", po),
+        }
+    try:
+        result = supply_outbound.prepare_asn(
+            ctx.store, ctx.uid, ctx.business_id, po["id"], po["version"]
+        )
+        saved = supply_outbound.send(
+            ctx.store,
+            ctx.uid,
+            ctx.business_id,
+            po["id"],
+            result["order"]["version"],
+            result["document"]["id"],
+        )
+    except HTTPException as error:
+        return _invalid(error, ctx)
+    return {
+        **_plain_order(saved),
+        "status": "sent",
+        "asn_number": result["document"]["number"],
+        "format": result["document"]["translated_format"],
+        "card_id": _supply_card(ctx, "order", saved),
+    }
+
+
+def send_pending_documents() -> dict[str, Any]:
+    """Send every goods receipt and shipping notice that has not gone out yet (what Close the
+    day reminds about): "send everything", "send the receipt", "send what's pending"."""
+    from . import supply_outbound
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    try:
+        result = supply_outbound.send_all(ctx.store, ctx.uid, ctx.business_id)
+    except HTTPException as error:
+        return _invalid(error, ctx)
+    return {
+        "status": "sent" if result["sent"] else "nothing_to_send",
+        "sent": [
+            {"what": KIND_WORDS[row["kind"]], "to": row["partner"], "order": row["number"]}
+            for row in result["sent"]
+        ],
+        "card_id": _supply_card(ctx, "send"),
+    }
+
+
+def view_document_as_sap(order: str = "", document: str = "") -> dict[str, Any]:
+    """Show a supply document as SAP sees it (the IDoc XML) beside plain words: "show the
+    shipping notice in SAP", "view the order as IDoc". order: number, partner or item;
+    document: order, change, forecast, confirmation, shipping notice, invoice or receipt."""
+
+    ctx = current.get()
+    if not ctx or not ctx.business_id:
+        return {"status": "needs_business"}
+    po = _find_order(ctx, order, lambda p: True)
+    if po is None:
+        return {"status": "unknown_order", "instruction": "Ask which order they mean."}
+    want = DOCUMENT_WORDS.get((document or "").strip().casefold(), "")
+    docs = [d for d in po["documents"] if not want or d["kind"] == want]
+    if not docs:
+        return {
+            **_plain_order(po),
+            "status": "no_document",
+            "instruction": "Say that document does not exist for this order yet.",
+        }
+    chosen = docs[-1]
+    sap = next((text for text in (chosen["translated"], chosen["raw"]) if "<IDOCTYP>" in text), "")
+    basic = re.search(r"<IDOCTYP>(\w+)</IDOCTYP>", sap)
+    return {
+        **_plain_order(po),
+        "status": "shown",
+        "what": KIND_WORDS.get(chosen["kind"], chosen["kind"]),
+        "idoc_type": basic.group(1) if basic else None,
+        "card_id": _supply_card(ctx, "sap", po, document_id=chosen["id"]),
+    }
+
+
 SUPPLY_TOOLS: list[Callable[..., Any]] = [
     get_supplier_rules,
     set_supplier_rules,
     draft_reorder,
     get_purchase_orders,
+    show_inbound,
+    accept_order_change,
+    approve_and_send_po,
+    record_goods_received,
+    send_asn,
+    send_pending_documents,
+    view_document_as_sap,
 ]
-SUPPLY_CARD_TOOLS = {"set_supplier_rules", "draft_reorder"}
+SUPPLY_CARD_TOOLS = {
+    "set_supplier_rules",
+    "draft_reorder",
+    "show_inbound",
+    "accept_order_change",
+    "approve_and_send_po",
+    "record_goods_received",
+    "send_asn",
+    "send_pending_documents",
+    "view_document_as_sap",
+}

@@ -81,6 +81,8 @@ class StreamEvent(StrictModel):
         # Supply chain: a purchase order drafted from the forecast, a supplier rule change.
         "purchase_order",
         "supply_rules",
+        # Partner documents in and out: an order, the inbound list, or a document's SAP view.
+        "supply",
         # A chart card (forecast, or how business is going) built from the tool result.
         "chart",
         # An app action from the coach: open a screen, or a prepared customer reply to send.

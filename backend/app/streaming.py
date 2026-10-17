@@ -48,6 +48,8 @@ PROPOSAL_TOOLS = {
     "request_registration",
     "set_open_today",
     "propose_stamp_card",
+    # Goods received: the stock update waits for the owner's review.
+    "record_goods_received",
 }
 
 

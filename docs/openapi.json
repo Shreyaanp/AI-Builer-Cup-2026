@@ -6644,6 +6644,29 @@
         }
       }
     },
+    "/api/v1/supply/demo": {
+      "post": {
+        "summary": "Showcase",
+        "description": "Explicit local demo; creates a private buyer and simulated supplier only.",
+        "operationId": "showcase_api_v1_supply_demo_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Showcase Api V1 Supply Demo Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{business_id}/supply/suppliers/{supplier_id}/rules": {
       "put": {
         "summary": "Save Rules",
@@ -7340,6 +7363,475 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Received Api V1 Businesses  Business Id  Supply Orders  Order Id  Received Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/board": {
+      "get": {
+        "summary": "Board",
+        "description": "What needs the owner, what came in, what was received and what must go out.",
+        "operationId": "board_api_v1_businesses__business_id__supply_board_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Board Api V1 Businesses  Business Id  Supply Board Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/inbound": {
+      "post": {
+        "summary": "Partner Document",
+        "description": "A partner's order create, order change or forecast (IDoc XML, CSV, JSON, a message),\nor a supplier's confirmation / shipping notice / invoice for one of the shop's orders.",
+        "operationId": "partner_document_api_v1_businesses__business_id__supply_inbound_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerDocument"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Partner Document Api V1 Businesses  Business Id  Supply Inbound Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/demo/next": {
+      "post": {
+        "summary": "Demo Next",
+        "description": "Demo: the synthetic buyer sends its next document (forecast, order, change) as an IDoc.",
+        "operationId": "demo_next_api_v1_businesses__business_id__supply_demo_next_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Demo Next Api V1 Businesses  Business Id  Supply Demo Next Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/orders/{order_id}/change": {
+      "post": {
+        "summary": "Answer Change",
+        "operationId": "answer_change_api_v1_businesses__business_id__supply_orders__order_id__change_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeAnswer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Answer Change Api V1 Businesses  Business Id  Supply Orders  Order Id  Change Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/orders/{order_id}/receipt": {
+      "post": {
+        "summary": "Goods Receipt",
+        "description": "Goods came in: lines left out arrived in full. The receipt waits until sent.",
+        "operationId": "goods_receipt_api_v1_businesses__business_id__supply_orders__order_id__receipt_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Goods Receipt Api V1 Businesses  Business Id  Supply Orders  Order Id  Receipt Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/orders/{order_id}/asn": {
+      "post": {
+        "summary": "Shipping Notice",
+        "operationId": "shipping_notice_api_v1_businesses__business_id__supply_orders__order_id__asn_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsnBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Shipping Notice Api V1 Businesses  Business Id  Supply Orders  Order Id  Asn Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/orders/{order_id}/send": {
+      "post": {
+        "summary": "Send Document",
+        "operationId": "send_document_api_v1_businesses__business_id__supply_orders__order_id__send_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Send Document Api V1 Businesses  Business Id  Supply Orders  Order Id  Send Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/send-all": {
+      "post": {
+        "summary": "Send All",
+        "description": "Close the day: everything still unsent goes out in one tap.",
+        "operationId": "send_all_api_v1_businesses__business_id__supply_send_all_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Send All Api V1 Businesses  Business Id  Supply Send All Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{business_id}/supply/inbox/{entry_id}/dismiss": {
+      "post": {
+        "summary": "Dismiss",
+        "operationId": "dismiss_api_v1_businesses__business_id__supply_inbox__entry_id__dismiss_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Dismiss Api V1 Businesses  Business Id  Supply Inbox  Entry Id  Dismiss Post"
                 }
               }
             }
@@ -8805,6 +9297,29 @@
         "title": "AskSuggestions",
         "description": "What the front door can suggest here, from the area's own shops (never invented)."
       },
+      "AsnBody": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "shipped": {
+            "items": {
+              "$ref": "#/components/schemas/LineQuantity"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Shipped"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "AsnBody"
+      },
       "AvailabilityRequest": {
         "properties": {
           "available": {
@@ -9668,6 +10183,26 @@
           "consent"
         ],
         "title": "ChallengeRequest"
+      },
+      "ChangeAnswer": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "accept": {
+            "type": "boolean",
+            "title": "Accept",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "ChangeAnswer"
       },
       "ChatSummary": {
         "properties": {
@@ -11940,6 +12475,29 @@
         ],
         "title": "LevelView"
       },
+      "LineQuantity": {
+        "properties": {
+          "line": {
+            "type": "integer",
+            "maximum": 99990.0,
+            "minimum": 1.0,
+            "title": "Line"
+          },
+          "quantity": {
+            "type": "number",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Quantity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "line",
+          "quantity"
+        ],
+        "title": "LineQuantity"
+      },
       "LocalSignIn": {
         "properties": {
           "name": {
@@ -12622,6 +13180,28 @@
           "accuracy_m"
         ],
         "title": "OwnerLocation"
+      },
+      "PartnerDocument": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 10,
+            "title": "Text"
+          },
+          "partner_id": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Partner Id",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "PartnerDocument"
       },
       "PassportView": {
         "properties": {
@@ -14202,6 +14782,35 @@
         ],
         "title": "RecapItem"
       },
+      "ReceiptBody": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "received": {
+            "items": {
+              "$ref": "#/components/schemas/LineQuantity"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Received"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "ReceiptBody"
+      },
       "ReorderBody": {
         "properties": {
           "item": {
@@ -14839,6 +15448,28 @@
           "message_id"
         ],
         "title": "Seen"
+      },
+      "SendBody": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "doc_id": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Doc Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "doc_id"
+        ],
+        "title": "SendBody"
       },
       "ServiceAttributes": {
         "properties": {
@@ -17316,6 +17947,7 @@
               "rescue_proposal",
               "purchase_order",
               "supply_rules",
+              "supply",
               "chart",
               "action",
               "payment_link"

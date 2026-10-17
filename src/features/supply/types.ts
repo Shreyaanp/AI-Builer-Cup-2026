@@ -134,6 +134,7 @@ export interface PurchaseOrder {
     wanted: number
     owner_quantity: boolean
     tier_min: number
+    moq?: number
     on_time: boolean
     headroom: number | null
     options: number
@@ -157,6 +158,8 @@ export interface PurchaseOrder {
   backorders: { item: string; quantity: number; unit: string; date: string }[]
   changes?: OrderChange[]
   received: boolean
+  received_at?: number
+  received_stock?: Record<string, number>
   invoiced?: boolean
   invoice_total?: number | null
   disputed?: boolean
