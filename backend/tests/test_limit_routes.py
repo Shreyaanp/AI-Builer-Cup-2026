@@ -138,6 +138,32 @@ def test_voice_limit_and_disconnect_cleanup(app: FastAPI) -> None:
         assert not app.state.services.registry.active
 
 
+def test_a_reconnect_on_a_flaky_network_is_not_refused_as_a_new_session(app: FastAPI) -> None:
+    """New sessions are capped; reconnects of the owner's open conversation have their own,
+    larger budget (a phone on bad data reconnects many times)."""
+    with TestClient(app) as client:
+        join(client)
+        uid = app.state.services.identity.local_principal(
+            client.cookies.get("ogoogle_preview_session")
+        ).uid
+        fill(app, "voice", uid, remaining=1)
+        fill(app, "voice:resume", uid, remaining=3)
+        headers = {"origin": "http://127.0.0.1:3200"}
+        with client.websocket_connect("/api/v1/voice", headers=headers) as socket:
+            ready = socket.receive_json()
+            socket.send_json({"kind": "close"})
+        with client.websocket_connect("/api/v1/voice", headers=headers) as socket:
+            assert socket.receive_json()["code"] == "RATE_LIMITED"
+        path = f"/api/v1/voice?session_id={ready['session_id']}"
+        for _ in range(3):
+            with client.websocket_connect(path, headers=headers) as socket:
+                event = socket.receive_json()
+                assert event["kind"] == "ready" and event["session_id"] == ready["session_id"]
+                socket.send_json({"kind": "close"})
+        with client.websocket_connect(path, headers=headers) as socket:
+            assert socket.receive_json()["code"] == "RATE_LIMITED"
+
+
 def test_public_inquiry_limits(app: FastAPI) -> None:
     with TestClient(app) as client:
         bid = create_shop(app.state.merchant)

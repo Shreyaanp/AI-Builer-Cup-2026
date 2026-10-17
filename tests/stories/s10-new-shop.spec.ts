@@ -90,24 +90,15 @@ test('S10 · owner opens a new shop by talking to the coach', async ({ page, con
     await shot(page, 10, '3-action')
   })
 
-  await test.step('4 · the map in the chat: small view, big view, confirm the pin; live', async () => {
+  await test.step('4 · the map in the chat: the phone’s location is saved at once; live', async () => {
+    // Owner decision (17 Oct): only the browser's prompt, no confirm step in the app.
     await page.getByRole('button', { name: 'Use my current location' }).click()
     const card = page.getByTestId('map-card').last()
+    await expect(card).toHaveAttribute('data-state', 'done')
     await expect(card).toContainText('Near Indiranagar')
-    await expect(card).toContainText('within 20 m')
-    await expect(card.getByTestId('pin-map')).toBeVisible()
     await card.scrollIntoViewIfNeeded()
     await evidence(page, 'map-1-small')
-    await card.getByRole('button', { name: 'Bigger map' }).click()
-    const big = page.getByRole('dialog', { name: 'Where is your shop?' })
-    await expect(big.getByTestId('pin-map')).toBeVisible()
-    await expect(big).toContainText('within 20 m')
-    await page.waitForTimeout(400)
-    await evidence(page, 'map-2-big')
-    await axe(page, 1)
-    await big.getByRole('button', { name: 'This is my shop' }).click()
-    await expect(big).toBeHidden()
-    await expect(page.getByTestId('map-card').last()).toHaveAttribute('data-state', 'done')
+    await axe(page)
     // Name, kind and the pin: the shop is live by itself, and the coach asks what is left:
     // first the tea stall's own follow-up (#112), never a generic one.
     await expect(page.getByTestId('shop-live')).toBeVisible()

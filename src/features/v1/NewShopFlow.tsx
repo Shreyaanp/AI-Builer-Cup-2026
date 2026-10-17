@@ -1431,6 +1431,7 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
                       }
                       done={line.done}
                       autoLocate={line.locate}
+                      direct
                       onConfirm={(point) => savePin(line.id, point)}
                       onActive={() => openCards.current.add(line.id)}
                     />

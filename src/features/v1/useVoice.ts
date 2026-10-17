@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIdentity } from '../../auth/useIdentity'
-import { reconnectDelay, waitOnline } from '../../api/stream'
+import { reconnectDelay, waitOnline, waitVisible } from '../../api/stream'
 import type { CoachEvent } from '../../api/stream'
 import { useLocale } from '../../state/hooks'
 import { useLanguageSwitch } from './languageSwitch'
@@ -66,15 +66,35 @@ export interface VoiceConversation {
 }
 
 /**
- * Consecutive reconnect attempts before a conversation pauses and offers Retry (with growing
- * pauses up to 8 s, about half a minute in all: long enough for a network switch or a lift).
+ * Consecutive failed reconnects (while online and in the foreground) before a conversation
+ * pauses and offers Retry, with growing pauses up to 8 s: about 45 s of a flaky network.
  */
-const RETRIES = 6
+const RETRIES = 8
 /** Attempts after the server itself refused the session (provider down, a bad session). */
 const REFUSED_RETRIES = 4
 const METER = new Float32Array(512)
 /** Press-to-talk: with no word from the server this long after speaking, thinking stops. */
 const REPLY_IDLE_MS = 12_000
+/**
+ * A phone network drop often leaves the socket open but silent. The app pings when the server
+ * has been quiet this long, and a socket that stays silent for DEAD_SOCKET_MS is replaced (the
+ * server pings every 20 s and answers every ping at once).
+ */
+const QUIET_PING_MS = 8_000
+const DEAD_SOCKET_MS = 20_000
+/** Back from the background: a socket that does not answer a ping this fast is replaced. */
+const PROBE_MS = 4_000
+/** A reconnect that does not get its session back this fast is tried again. */
+const READY_RETRY_MS = 20_000
+/** How long an offline phone waits for the network before the conversation offers Retry. */
+const OFFLINE_WAIT_MS = 120_000
+/**
+ * The owner's words while the socket is down or the network too slow (10 s of 16 kHz PCM16):
+ * held, then sent to the session when it is back, so an answer is not lost.
+ */
+const HELD_AUDIO_BYTES = 320_000
+/** Held audio goes out in frames the server accepts (at most 32 KiB, whole samples). */
+const HELD_FRAME_BYTES = 16_000
 
 function level(meter: AnalyserNode | undefined) {
   if (!meter) return 0
@@ -140,6 +160,7 @@ export function useVoice(
   }, [newShop])
   // Conversation mode: the microphone stays closed until the coach's first turn has played.
   const micOpen = useRef(false)
+  const held = useRef<{ packets: ArrayBuffer[]; bytes: number }>({ packets: [], bytes: 0 })
   const releaseSocket = useCallback(() => {
     const current = runtime.current
     runtime.current = null
@@ -163,6 +184,7 @@ export function useVoice(
     owner.current = null
     releaseSocket()
     releaseMedia()
+    held.current = { packets: [], bytes: 0 }
     speechSynthesis.cancel()
     if (mounted.current) setState('idle')
   }, [releaseSocket, releaseMedia])
@@ -298,16 +320,37 @@ export function useVoice(
     silent.connect(current.audio.destination)
     // Always the socket of the moment: a reconnect swaps it under the same microphone.
     node.port.onmessage = (packet: MessageEvent<ArrayBuffer>) => {
+      if (!micOpen.current || micPausedRef.current) return
       const socket = runtime.current
-      if (
-        socket?.ready &&
-        micOpen.current &&
-        !micPausedRef.current &&
-        socket.socket.readyState === WebSocket.OPEN &&
-        socket.socket.bufferedAmount < 65536
-      )
-        socket.socket.send(packet.data)
+      if (socket && sendHeld(socket)) socket.socket.send(packet.data)
+      else if (conversationRef.current) hold(packet.data)
     }
+  }
+  /** Conversation mode: keeps the newest words while they cannot be sent. */
+  function hold(packet: ArrayBuffer) {
+    const words = held.current
+    words.packets.push(packet)
+    words.bytes += packet.byteLength
+    while (words.bytes > HELD_AUDIO_BYTES && words.packets.length)
+      words.bytes -= words.packets.shift()!.byteLength
+  }
+  /** Sends the held words first; false while the socket cannot take audio now. */
+  function sendHeld(current: VoiceRuntime) {
+    const socket = current.socket
+    if (!current.ready || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount >= 65536)
+      return false
+    const words = held.current
+    if (!words.bytes) return true
+    const all = new Uint8Array(words.bytes)
+    let at = 0
+    for (const packet of words.packets) {
+      all.set(new Uint8Array(packet), at)
+      at += packet.byteLength
+    }
+    held.current = { packets: [], bytes: 0 }
+    for (let start = 0; start < all.length; start += HELD_FRAME_BYTES)
+      socket.send(all.slice(start, start + HELD_FRAME_BYTES))
+    return socket.bufferedAmount < 65536
   }
   async function connect(operation: AbortController, attempt: number, sid?: string, quick = false) {
     if (operation.signal.aborted) return
@@ -317,9 +360,14 @@ export function useVoice(
     let token: string | null
     try {
       if (retry) {
-        const recovery = AbortSignal.any([operation.signal, AbortSignal.timeout(45_000)])
-        await waitOnline(recovery)
-        await reconnectDelay(quick ? 150 : Math.min(500 * 2 ** (attempt - 1), 8000), recovery)
+        // Nothing is tried in the background (the phone may freeze the page and every try would
+        // fail): the conversation comes back when the owner does.
+        await waitVisible(operation.signal)
+        await waitOnline(AbortSignal.any([operation.signal, AbortSignal.timeout(OFFLINE_WAIT_MS)]))
+        await reconnectDelay(
+          quick ? 150 : Math.min(500 * 2 ** (attempt - 1), 8000),
+          operation.signal,
+        )
       }
       token = await identity.getToken()
     } catch {
@@ -341,16 +389,34 @@ export function useVoice(
     socket.binaryType = 'arraybuffer'
     let sessionId = sid
     let lastMessage = 0
+    let lastPing = 0
+    let probe: ReturnType<typeof setTimeout> | undefined
     // The server's reason before it closed (time cap, provider error), for the next step.
     let lastCode = ''
     const offline = () => socket.close(4000, 'Connection interrupted')
+    const ping = () => {
+      lastPing = performance.now()
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ kind: 'ping' }))
+    }
     const watchdog = setInterval(() => {
-      if (lastMessage && performance.now() - lastMessage > 45_000)
-        socket.close(4000, 'Heartbeat missed')
-    }, 5_000)
+      if (!lastMessage) return
+      const quiet = performance.now() - lastMessage
+      // Before ready the server is still setting up (it reads no frames yet).
+      if (!current.ready) {
+        if (quiet > 45_000) socket.close(4000, 'Heartbeat missed')
+      } else if (quiet > DEAD_SOCKET_MS) socket.close(4000, 'Heartbeat missed')
+      else if (quiet > QUIET_PING_MS && performance.now() - lastPing > QUIET_PING_MS) ping()
+    }, 2_000)
     const foreground = () => {
-      if (document.visibilityState === 'visible' && performance.now() - lastMessage > 45_000)
-        socket.close(4000, 'Heartbeat missed')
+      if (document.visibilityState !== 'visible' || !current.ready) return
+      // Back from the background: the socket may have died while the page was frozen.
+      if (performance.now() - lastMessage < QUIET_PING_MS) return
+      const asked = performance.now()
+      ping()
+      clearTimeout(probe)
+      probe = setTimeout(() => {
+        if (lastMessage < asked) socket.close(4000, 'Heartbeat missed')
+      }, PROBE_MS)
     }
     window.addEventListener('offline', offline)
     document.addEventListener('visibilitychange', foreground)
@@ -360,6 +426,7 @@ export function useVoice(
       ready: false,
       cleanup: () => {
         clearInterval(watchdog)
+        clearTimeout(probe)
         window.removeEventListener('offline', offline)
         document.removeEventListener('visibilitychange', foreground)
         socket.onclose = null
@@ -369,7 +436,10 @@ export function useVoice(
       },
     }
     runtime.current = current
-    current.deadline = setTimeout(() => socket.close(4000, 'Connection timeout'), 45_000)
+    current.deadline = setTimeout(
+      () => socket.close(4000, 'Connection timeout'),
+      retry ? READY_RETRY_MS : 45_000,
+    )
     socket.onopen = () => {
       lastMessage = performance.now()
       if (token) socket.send(JSON.stringify({ kind: 'authenticate', token }))
@@ -440,6 +510,8 @@ export function useVoice(
           if (runtime.current !== current) return
           current.ready = true
           attempts.current = 0
+          // What the owner said while the session was away goes to it now.
+          sendHeld(current)
           if (!conversationRef.current) current.deadline = setTimeout(finishRecording, 30_000)
           setState('recording')
           conversationRef.current?.onReady?.(retry, Boolean(event.data?.continues))

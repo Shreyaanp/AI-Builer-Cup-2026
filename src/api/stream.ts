@@ -86,6 +86,29 @@ export function reconnectDelay(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+/** Resolves once the page is in the foreground (a phone may freeze a page in the background). */
+export async function waitVisible(signal: AbortSignal): Promise<void> {
+  if (document.visibilityState === 'visible') return
+  await new Promise<void>((resolve, reject) => {
+    signal.throwIfAborted()
+    const cleanup = () => {
+      document.removeEventListener('visibilitychange', visible)
+      signal.removeEventListener('abort', abort)
+    }
+    const visible = () => {
+      if (document.visibilityState !== 'visible') return
+      cleanup()
+      resolve()
+    }
+    const abort = () => {
+      cleanup()
+      reject(signal.reason)
+    }
+    document.addEventListener('visibilitychange', visible)
+    signal.addEventListener('abort', abort, { once: true })
+  })
+}
+
 export async function waitOnline(signal: AbortSignal): Promise<void> {
   if (navigator.onLine) return
   await new Promise<void>((resolve, reject) => {

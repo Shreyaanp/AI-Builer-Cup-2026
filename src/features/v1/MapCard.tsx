@@ -65,12 +65,13 @@ function useAddress(point: Point | null) {
 /**
  * The location as a card in the conversation: a small map with the pin, the address and the
  * accuracy, "Use my current location", and a big full-screen map for careful placing. Nothing
- * is saved until "This is my shop".
+ * is saved until "This is my shop", except with `direct`.
  */
 export function MapCard({
   initial,
   done,
   autoLocate = false,
+  direct = false,
   onConfirm,
   onActive,
 }: {
@@ -79,6 +80,11 @@ export function MapCard({
   done: string | null
   /** Measure at once (the owner tapped "My location", so the request follows their tap). */
   autoLocate?: boolean
+  /**
+   * The new-shop flow (owner decision, 17 Oct): the phone's location is saved as soon as it is
+   * measured, with only the browser's own prompt. A pin placed by hand still needs the confirm.
+   */
+  direct?: boolean
   onConfirm: (choice: PinChoice, address: string | null) => Promise<void>
   /** The owner is placing the pin (the coach waits instead of nudging). */
   onActive?: () => void
@@ -94,6 +100,7 @@ export function MapCard({
   const location = useMeasureLocation(async (point) => {
     setFix({ lat: point.lat, lng: point.lng, m: point.accuracy_m })
     setPin({ lat: point.lat, lng: point.lng })
+    if (direct) await save({ ...point, source: 'device' }, null)
   })
   const asked = useRef(false)
   async function locate() {
@@ -116,23 +123,26 @@ export function MapCard({
 
   const address = useAddress(done ? null : pin)
   const moved = !fix || !pin || metres(fix, pin) > Math.max(5, fix.m / 2)
-  async function confirm() {
-    if (!pin || saving) return
+  async function save(choice: PinChoice, label: string | null) {
     setSaving(true)
     setError('')
     try {
-      await onConfirm(
-        moved
-          ? { ...pin, accuracy_m: 0, source: 'pin' }
-          : { lat: fix!.lat, lng: fix!.lng, accuracy_m: fix!.m, source: 'device' },
-        address,
-      )
+      await onConfirm(choice, label)
       setBig(false)
     } catch {
       setError(t.actionFailed)
     } finally {
       setSaving(false)
     }
+  }
+  function confirm() {
+    if (!pin || saving) return
+    void save(
+      moved
+        ? { ...pin, accuracy_m: 0, source: 'pin' }
+        : { lat: fix!.lat, lng: fix!.lng, accuracy_m: fix!.m, source: 'device' },
+      address,
+    )
   }
 
   if (done)
@@ -160,7 +170,7 @@ export function MapCard({
       saving={saving}
       error={error}
       onLocate={() => void locate()}
-      onConfirm={() => void confirm()}
+      onConfirm={confirm}
     />
   )
   return (

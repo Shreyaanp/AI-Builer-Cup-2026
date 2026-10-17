@@ -38,6 +38,7 @@ LIMITS: dict[str, tuple[tuple[int, int], ...]] = {
     "coach": ((20, 60), (300, 86_400)),
     # Every mic press opens a session; owners test voice many times in a row.
     "voice": ((30, 600), (300, 86_400)),
+    "voice:resume": ((90, 600), (600, 86_400)),
     "photo": ((10, 60), (60, 86_400)),
     # Shop gallery uploads (moderated, no AI extraction).
     "gallery": ((20, 60), (100, 86_400)),

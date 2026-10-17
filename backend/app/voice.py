@@ -13,11 +13,12 @@ from google.adk.live.live_request_queue import LiveRequestQueue
 from google.genai import types
 from pydantic import ValidationError
 
-from .agent import asks_to_end, ui_language
+from .agent import asks_to_end, background_tools, ui_language
 from .auth import Principal
 from .contracts import NewShopVoiceContext, StreamEvent, VoiceControl
 from .coordinator import current
 from .latency import FirstOutput
+from .latency import stats as latency
 from .new_shop_resume import merge_drafts, question_in
 from .new_shop_tools import end_conversation, go_live
 from .reply_language import ReplyLanguage, reply_language
@@ -288,6 +289,26 @@ async def end_by_request(websocket: WebSocket) -> None:
         await websocket.send_json(StreamEvent(kind="action", data=card[1]).payload())
 
 
+def tool_result(response: types.FunctionResponse, called: float | None) -> None:
+    """Every tool result on its way back to the Live model is logged with what it carries (owner
+    report, 17 Oct: missing context seemed to break the flow), and its time joins the latency
+    read-out. A background (NON_BLOCKING) result carries its scheduling."""
+    body = response.response or {}
+    ms = (time.perf_counter() - called) * 1000 if called is not None else None
+    missing = body.get("still_missing")
+    log.info(
+        "voice_tool_result",
+        tool=response.name,
+        ms=round(ms, 1) if ms is not None else None,
+        scheduling=response.scheduling.value if response.scheduling else "blocking",
+        status=str(body.get("status", ""))[:40],
+        fields=sorted(body)[:16],
+        missing=len(missing) if isinstance(missing, list) else None,
+    )
+    if ms is not None:
+        latency.record(f"voice_tool:{response.name}", ms)
+
+
 class LiveLink:
     """The Live connection of the moment: a rotation swaps in a fresh request queue."""
 
@@ -363,6 +384,8 @@ async def gemini_voice(
     async def one_connection() -> str:
         """Run one Live connection; returns why it ended (the socket itself stays open)."""
         nonlocal extras
+        # A model that refused the tuned setup gets plain blocking tools too.
+        background_tools.set(extras)
         events = runtime.live_runner.run_live(
             user_id=principal.uid,
             session_id=sid,
@@ -375,6 +398,8 @@ async def gemini_voice(
         said = ""
         owner_said = ""
         received = False
+        # When each tool call was seen (by call id), for the time its result took.
+        called: dict[str, float] = {}
         # This turn so far: the coach spoke (audio or words) / a tool ran. After a tool, ADK
         # completes a turn at once, before the coach says anything (live, 17 Oct): that turn is
         # not the reply, so it is not passed on (press-to-talk hung up on it, #137).
@@ -399,6 +424,10 @@ async def gemini_voice(
                     spoke = True
                 calls = event.get_function_calls()
                 stats.tool_calls += len(calls)
+                for call in calls:
+                    called[call.id or call.name or ""] = time.perf_counter()
+                for response in event.get_function_responses():
+                    tool_result(response, called.pop(response.id or response.name or "", None))
                 tools_ran = tools_ran or bool(calls or event.get_function_responses())
                 silent_tool_turn = bool(event.turn_complete) and tools_ran and not spoke
                 for visible in public_events(event):

@@ -93,7 +93,7 @@ def test_explicit_switch_tool_updates_the_app_setting() -> None:
     assert action.kind == "action"
     assert action.data == {"target": "language", "language": "ta"}
     voice = make_agent(Settings(_env_file=None, v1_enabled=True), live=True)
-    assert "set_reply_language" in [tool.__name__ for tool in voice.tools]  # type: ignore[union-attr]
+    assert "set_reply_language" in [getattr(tool, "name", None) or tool.__name__ for tool in voice.tools]  # type: ignore[union-attr]
 
 
 @pytest.mark.parametrize(("lang", "hindi"), [("hi-IN", True), ("en", False), (None, False)])

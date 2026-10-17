@@ -588,10 +588,14 @@ def create_app(
         try:
             async with asyncio.timeout(5):
                 principal = await services.identity.require_websocket(websocket)
-            await enforce_limits(websocket, [("voice", principal.uid)])
             requested = websocket.query_params.get("session_id")
             if requested:
                 requested = str(UUID(requested))
+            # A reconnect of an open conversation (a phone on flaky data reconnects often) has its
+            # own, larger budget, so a bad network never ends in "too many voice sessions".
+            await enforce_limits(
+                websocket, [("voice:resume" if requested else "voice", principal.uid)]
+            )
             bid = websocket.query_params.get("business_id")
             new_shop = websocket.query_params.get("new_shop") == "true"
             if new_shop and bid:

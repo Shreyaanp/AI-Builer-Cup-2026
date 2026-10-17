@@ -66,18 +66,21 @@ for (const scheme of ['light', 'dark'] as const) {
     await camera.getByRole('button', { name: 'Close camera' }).click()
     await expect(camera).toHaveCount(0)
 
+    // "My location" saves the phone's location at once (owner decision, 17 Oct): the browser's
+    // own prompt only, no confirm step in the app.
+    let sent: { source?: string; accuracy_m?: number } | undefined
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/v1/proposals') && request.method() === 'POST')
+        sent = request.postDataJSON().owner_location
+    })
     await page.getByRole('button', { name: 'My location' }).click()
     const map = page.getByTestId('map-card')
+    await expect(map).toHaveAttribute('data-state', 'done')
     await expect(map).toContainText('Near Indiranagar')
+    expect(sent).toMatchObject({ source: 'device', accuracy_m: 20 })
+    await expect(page.getByRole('button', { name: 'This is my shop' })).toHaveCount(0)
     await audit(page)
     await page.screenshot({ path: name('map-1-small', scheme, isMobile) })
-    await map.getByRole('button', { name: 'Bigger map' }).click()
-    const big = page.getByRole('dialog', { name: 'Where is your shop?' })
-    await expect(big).toContainText('within 20 m')
-    await audit(page)
-    await page.screenshot({ path: name('map-2-big', scheme, isMobile) })
-    await big.getByRole('button', { name: 'Close the big map' }).click()
-    await expect(big).toBeHidden()
 
     await page.getByRole('button', { name: 'Type it in instead' }).click()
     await expect(page.getByTestId('guided-details')).toHaveAttribute('data-step', 'name')
@@ -114,18 +117,32 @@ test('camera blocked: the alert explains, Try again and Upload instead work', as
   await expect(camera).toHaveCount(0)
 })
 
+// Location refused: the card stays open so the owner can place the pin by hand (and confirm it).
+async function refuseLocation(page: Page) {
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (_, fail) =>
+      fail?.({ code: 1, message: 'denied' } as GeolocationPositionError)
+  })
+}
+
 test('a pin moved by hand is saved as the owner’s pin, not as GPS accuracy', async ({
   page,
   context,
 }) => {
   await localOnly(page)
   await inChatFixtures(page)
-  await context.grantPermissions(['geolocation', 'microphone'])
-  await context.setGeolocation({ latitude: 12.9718234, longitude: 77.6412345, accuracy: 20 })
+  await refuseLocation(page)
+  await context.grantPermissions(['microphone'])
   await open(page, 'light')
   await page.getByRole('button', { name: 'My location' }).click()
   const map = page.getByTestId('map-card')
-  await expect(map).toContainText('within 20 m')
+  await expect(map).toHaveAttribute('data-state', 'open')
+  await map.getByRole('button', { name: 'Bigger map' }).click()
+  const big = page.getByRole('dialog', { name: 'Where is your shop?' })
+  await expect(big.getByTestId('pin-map')).toBeVisible()
+  await audit(page)
+  await big.getByRole('button', { name: 'Close the big map' }).click()
+  await expect(big).toBeHidden()
   const surface = map.getByTestId('pin-map')
   const before = Number(await surface.getAttribute('data-lng'))
   // Drag the map by touch-free pointer moves, then nudge with the keyboard; both send the pin
@@ -157,16 +174,14 @@ test('map pictures offline: the chalk grid stays and the pin still works', async
   await localOnly(page)
   await inChatFixtures(page)
   await page.route('https://tile.openstreetmap.org/**', (route) => route.abort())
-  await context.grantPermissions(['geolocation', 'microphone'])
-  await context.setGeolocation({ latitude: 12.9718234, longitude: 77.6412345, accuracy: 20 })
+  await refuseLocation(page)
+  await context.grantPermissions(['microphone'])
   await open(page, 'light')
   await page.getByRole('button', { name: 'My location' }).click()
   const map = page.getByTestId('map-card')
   await expect(map).toContainText('The map pictures are not available right now')
-  await expect(map).toContainText('Near Indiranagar')
   await map.getByRole('button', { name: 'This is my shop' }).click()
   await expect(map).toHaveAttribute('data-state', 'done')
-  await expect(map).toContainText('Near Indiranagar')
 })
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -177,8 +192,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width: 360, height: 800 })
     await localOnly(page)
     await inChatFixtures(page)
-    await context.grantPermissions(['geolocation', 'microphone'])
-    await context.setGeolocation({ latitude: 12.9718234, longitude: 77.6412345, accuracy: 20 })
+    await refuseLocation(page)
+    await context.grantPermissions(['microphone'])
     await open(page, scheme)
     await page.getByRole('button', { name: 'My location' }).click()
     const confirmBtn = page.getByRole('button', { name: 'This is my shop' })

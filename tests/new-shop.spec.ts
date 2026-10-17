@@ -126,14 +126,12 @@ test('a measured location pins the shop; with name and kind it goes live with th
   await begin(page)
   await say(page, 'name: Courtyard Chai; category: Tea stall')
   await expect(page.getByTestId('shop-so-far')).toContainText('Courtyard Chai')
-  // "Are you at the shop right now?" opens the map at the measured point; nothing moves until
-  // the owner confirms it.
+  // "Are you at the shop right now?" opens the map; the measured point is saved at once (owner
+  // decision, 17 Oct: only the browser's prompt, no confirm step).
   const map = page.getByTestId('map-card')
   await map.getByRole('button', { name: 'Use my current location' }).click()
+  await expect(map).toHaveAttribute('data-state', 'done')
   await expect(map).toContainText('Near Indiranagar')
-  await expect(map).toContainText('within 20 m')
-  expect(await shops(page)).toEqual([])
-  await map.getByRole('button', { name: 'This is my shop' }).click()
   await expect(page.getByTestId('shop-so-far')).toContainText('Near Indiranagar')
   await expect(page.getByTestId('shop-live')).toBeVisible()
   await expect
