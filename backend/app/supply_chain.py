@@ -500,6 +500,7 @@ async def draft_reorder(
             "wanted": round(wanted, 2),
             "owner_quantity": bool(quantity),
             "tier_min": best["tier_min"],
+            "moq": best["moq"],
             "on_time": best["on_time"],
             "headroom": best["headroom"],
             "options": len(options),
@@ -633,6 +634,7 @@ def quote(
         "fits_credit": headroom is None or headroom >= total,
         "headroom": headroom,
         "tier_min": tier_min,
+        "moq": rule.moq if rule else 0,
     }
 
 
@@ -1288,6 +1290,7 @@ def receive(
         )
     po["received"] = True
     po["received_at"] = time.time()
+    po["received_stock"] = {name: product.stock for name, product in changed.items()}
     if po["status"] == "dispatched":
         po["status"] = "received"
     saved = _save(store, bid, po)

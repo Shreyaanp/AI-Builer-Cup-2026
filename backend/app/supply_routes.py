@@ -84,7 +84,33 @@ async def overview(business_id: str, request: Request) -> dict[str, Any]:
         supply_chain.relationships, store(request), uid, business_id
     )
     orders = await anyio.to_thread.run_sync(supply_chain.orders, store(request), uid, business_id)
-    return {"suppliers": rows, "orders": orders}
+    context = await anyio.to_thread.run_sync(store(request).context, uid, business_id)
+    history = await anyio.to_thread.run_sync(store(request).sales_history, uid, business_id)
+    today = supply_chain.shop_today(context)
+    forecast = await forecaster(request).forecast(history, today, context["inventory"])
+    needs = [
+        {"item": product["name"], **need}
+        for product in context["inventory"]
+        if (
+            need := supply_chain.need_from_forecast(
+                product, forecast.model_dump(mode="json"), product["name"], today
+            )
+        )["runs_out"]
+        and need["stock_known"]
+    ]
+    needs.sort(key=lambda need: need["runs_out"])
+    return {"suppliers": rows, "orders": orders, "needs": needs}
+
+
+@router.post("/supply/demo")
+async def showcase(request: Request) -> dict[str, str]:
+    """Explicit local demo; creates a private buyer and simulated supplier only."""
+    uid = await consented_owner(request)
+    if request.app.state.v1_settings.app_env not in {"local", "test"}:
+        raise HTTPException(404, "Not found.")
+    from .supply_showcase import create_showcase
+
+    return {"business_id": await create_showcase(store(request), uid)}
 
 
 @router.put("/businesses/{business_id}/supply/suppliers/{supplier_id}/rules")

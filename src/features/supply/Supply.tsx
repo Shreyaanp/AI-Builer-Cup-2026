@@ -23,6 +23,8 @@ import { useLocale } from '../../state/hooks'
 import { enterRise, shape } from '../../design/theme'
 import { formatPrice, toMajor, toMinor } from '../v1/format'
 import { Sheet } from '../v1/Sheet'
+import { useWorkspace } from '../v1/workspaceContext'
+import { useShowcaseCopy } from './showcaseCopy'
 import { Supporting, Tile } from '../v1/ShopTiles'
 import { useSupplyCopy } from './copy'
 import { orderTotal, poNumber } from './orderFormat'
@@ -76,6 +78,8 @@ type View = { kind: 'list' } | { kind: 'order'; id: string } | { kind: 'rules'; 
 
 export function SupplySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useSupplyCopy()
+  const demo = useShowcaseCopy()
+  const ws = useWorkspace()
   const roles = useTheme().material
   const locale = useLocale()
   const money = (order: PurchaseOrder) => {
@@ -143,6 +147,30 @@ export function SupplySheet({ open, onClose }: { open: boolean; onClose: () => v
         />
       ) : (
         <Stack spacing={4}>
+          {import.meta.env.DEV && (
+            <Button
+              disabled={drafting}
+              sx={{ minHeight: 48 }}
+              onClick={async () => {
+                setDrafting(true)
+                try {
+                  const result = await ws.api<{ business_id: string }>('/supply/demo', {
+                    method: 'POST',
+                  })
+                  await ws.reload()
+                  ws.select(result.business_id)
+                  close()
+                  ws.go('coach')
+                } catch {
+                  ws.notify(s.failed)
+                } finally {
+                  setDrafting(false)
+                }
+              }}
+            >
+              {demo.demo}
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={

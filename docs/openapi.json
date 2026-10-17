@@ -6644,6 +6644,29 @@
         }
       }
     },
+    "/api/v1/supply/demo": {
+      "post": {
+        "summary": "Showcase",
+        "description": "Explicit local demo; creates a private buyer and simulated supplier only.",
+        "operationId": "showcase_api_v1_supply_demo_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Showcase Api V1 Supply Demo Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{business_id}/supply/suppliers/{supplier_id}/rules": {
       "put": {
         "summary": "Save Rules",

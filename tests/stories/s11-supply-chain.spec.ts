@@ -168,7 +168,7 @@ test('S11 · forecast → PO → ORDRSP (partial) → ASN → invoice, translate
     await card.getByRole('button', { name: 'Goods arrived' }).click()
     await confirm(page)
     await status(card, 'Arrived')
-    await snap(page, '4-arrived', project, card.getByText(/^Dispatch ·/))
+    await snap(page, '4-arrived', project, card.getByRole('heading', { name: /^Shipping notice/ }))
   })
 
   await test.step('4 · INVOIC with the wrong price: three-way match flags it', async () => {
