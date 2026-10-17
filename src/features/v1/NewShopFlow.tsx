@@ -256,6 +256,11 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
     endedRef.current = next
     setEndedState(next)
   }
+  /** The owner said stop (any language): the chat rests and Review my shop opens at once. */
+  const endAfterStop = () => {
+    setEnded(true)
+    setReviewOpen(true)
+  }
   // A turn that took too long (no event for TURN_IDLE_MS): what to send again on Retry.
   const [stalled, setStalled] = useState<string | null>(null)
   const turnTimer = useRef<number | undefined>(undefined)
@@ -659,7 +664,7 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
     if (event.kind === 'turn_complete') commitCoach(true)
     // Typed: the goodbye is in; the conversation ends here (voice ends on its own close).
     if (event.kind === 'turn_complete' && endAsked.current && voiceRef.current?.state === 'idle')
-      setEnded(true)
+      endAfterStop()
   }
   /** The live voice: the same turn, its words and cards revealed in step with the audio. */
   function receiveVoice(event: CoachEvent) {
@@ -713,7 +718,7 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
     },
     onEnded: () => {
       wantVoice.current = false
-      setEnded(true)
+      endAfterStop()
     },
   })
   useEffect(() => {
@@ -1194,6 +1199,8 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
     mutedRef.current = !muted
     if (!muted) stopSpeaking()
     setMuted(!muted)
+    // Remembered for the coach chat and the next visit.
+    ws.setSpeakReplies(muted)
   }
   const roundButton = (size: number, bg: string, fg: string) => ({
     width: size,

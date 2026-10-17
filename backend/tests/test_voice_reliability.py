@@ -801,3 +801,30 @@ async def test_a_completed_spoken_turn_is_not_replayed_after_a_drop(tmp_path: Pa
         FakeLive([answers_then_drops, listens]), socket, new_shop_context(tmp_path)
     )
     assert stats.rotations == 1 and replayed == [0]
+
+
+def test_a_stop_word_in_any_app_language_ends_the_chat() -> None:
+    from app.agent import asks_to_end
+
+    for word in (
+        "stop",
+        "That's all.",
+        "bas",
+        "ho gaya",
+        "बस",
+        "हो गया",
+        "够了",
+        "好了。",
+        "cukup",
+        "sudah",
+        "sudah cukup",
+        "போதும்",
+        "நிறுத்து",
+    ):
+        assert asks_to_end(word), word
+    for answer in (
+        "Lakshmi Tea Stall, bas itna hi naam hai",
+        "我的店叫好了茶铺",
+        "cukup besar untuk lima orang",
+    ):
+        assert not asks_to_end(answer), answer

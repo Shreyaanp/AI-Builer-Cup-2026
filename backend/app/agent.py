@@ -405,8 +405,13 @@ REVIEW_WORDS = re.compile(
 )
 # The owner wants to stop: the conversation ends (end_conversation), whatever is still missing.
 END_WORDS = re.compile(
-    r"^\W*(?:bas|bas karo|ho gaya|band karo|that'?s all|stop|bye|goodbye|enough)\W*$"
-    r"|^\W*(?:बस|हो गया|बंद करो|बस करो|बाय)\W*$|\bbas,? (?:itna hi|ho gaya)\b|बस,? इतना ही",
+    r"^\W*(?:bas|bas karo|ho gaya|band karo|that'?s all|that is all|stop|stop it|bye|goodbye|enough"
+    r"|i'?m done|that'?s enough|cukup|sudah|sudah cukup|sudah selesai|selesai|berhenti|tamat"
+    r"|dah cukup|sampai sini)\W*$"
+    r"|^\W*(?:बस|हो गया|बंद करो|बस करो|बाय|रुको|रुकिए|काफ़ी है|काफी है|बस इतना)\W*$"
+    r"|^\W*(?:够了|好了|行了|停|停止|别说了|不用了|再见|拜拜|结束|夠了|別說了|不用了|再見|結束)[。！!]?\W*$"
+    r"|^\W*(?:போதும்|நிறுத்து|நிறுத்துங்கள்|நிறுத்துங்க|முடிந்தது|சரி போதும்|பை)\W*$"
+    r"|\bbas,? (?:itna hi|ho gaya)\b|बस,? इतना ही",
     re.I,
 )
 
