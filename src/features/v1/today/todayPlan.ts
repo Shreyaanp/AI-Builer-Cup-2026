@@ -179,7 +179,8 @@ export function todayPlan(input: TodayInput): TodayPlan {
   const done = total - steps.filter((step) => step !== 'share' && !REMINDERS.includes(step)).length
   const metrics = metricsFor(shop, facts?.hints)
   const pulse = facts
-    ? (pulseLine(facts.yesterday, 'yesterday', metrics) ?? pulseLine(facts.today, 'today', metrics))
+    ? (pulseLine(facts.yesterday, 'yesterday', metrics) ??
+      (facts.today ? pulseLine(facts.today, 'today', metrics) : null))
     : null
   const busy = timeRanges(shop.fields.busy_hours ?? '')[0] ?? null
   const forecast = facts?.forecast
@@ -191,7 +192,9 @@ export function todayPlan(input: TodayInput): TodayPlan {
   const setup = steps.filter((step) => !REMINDERS.includes(step))
   const dayOne = fresh && setup.length ? { step: setup[0]! } : null
 
-  const serverClosed = Boolean(facts && (facts.today.sales != null || facts.today.items != null))
+  const serverClosed = Boolean(
+    facts?.today && (facts.today.sales != null || facts.today.items != null),
+  )
   const isClosed = Boolean(input.dayClosed || serverClosed)
   const closeWindow = isCloseDayWindow(shop.fields, input.now)
 

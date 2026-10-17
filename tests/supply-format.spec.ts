@@ -5,6 +5,7 @@ test('poNumber drops a leading PO- so the label reads "PO 2026-0042"', () => {
   expect(poNumber('PO-2026-0042')).toBe('2026-0042')
   expect(poNumber('po 17')).toBe('17')
   expect(poNumber('2026-0042')).toBe('2026-0042')
+  expect(poNumber(17)).toBe('17')
   expect(poNumber(undefined)).toBe('')
 })
 

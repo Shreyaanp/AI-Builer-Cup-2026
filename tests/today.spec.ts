@@ -152,6 +152,14 @@ test('day one: setup bar, a warm start with the next step and the mic, no empty 
   await shot(page, 'day-one')
 })
 
+test('Today stays available when server facts omit today metrics', async ({ page }) => {
+  await facts(page, { today: undefined })
+  await shop(page, { name: 'Courtyard Chai', ...FULL }, PRODUCTS)
+
+  await expect(page.getByTestId('today')).toBeVisible()
+  await expect(page.getByTestId('today-pulse')).toHaveCount(0)
+})
+
 test('needs you now: at most three, most urgent first, each leaves when done', async ({ page }) => {
   await facts(page, {
     yesterday: { sales: 420000, items: 210, views: 38, questions: 3, stamps: 9, returning: 4 },
