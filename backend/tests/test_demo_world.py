@@ -3,8 +3,9 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from google.adk.sessions import InMemorySessionService
 
-from app.demo_world import fixture_world, world_id
+from app.demo_world import fixture_world
 from app.main import create_app
+from app.tour_catalogue import TOUR_SHOPS
 from tests.test_discover import settings
 
 INDIRANAGAR = {"lat": 12.9719, "lng": 77.6412}
@@ -55,7 +56,7 @@ def test_world_seeds_labelled_demo_shops_once_per_area(tmp_path: Path) -> None:
         receipt = made.json()
         assert receipt["created"] is True and receipt["source"] == "fixture"
         assert len(receipt["shop_ids"]) == 8
-        assert receipt["shop_ids"][0] == world_id(INDIRANAGAR["lat"], INDIRANAGAR["lng"], 0)
+        assert receipt["shop_ids"] == [s.id for s in TOUR_SHOPS if s.city == "bengaluru"]
 
         shop = client.get(f"/api/v1/public/shops/{receipt['shop_ids'][1]}").json()
         assert shop["name"].endswith("(Demo)")

@@ -10,7 +10,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from zoneinfo import ZoneInfoNotFoundError
 
 from fastapi import HTTPException
@@ -292,13 +292,22 @@ def customer_facts(fields: dict[str, Any]) -> dict[str, Any]:
         if fields.get(key) not in (None, "", []) and key in allowed
     }
     profile = profile_for(fields)
+    if profile.kind == "food" and profile.food and profile.food.diet in {"veg_only", "vegan"}:
+        # The stated diet already answers this customer filter; don't ask it again as
+        # an optional fact (which bakery/beverage profiles intentionally omit).
+        facts["vegetarian_options"] = True
     if profile.kind != "generic":
         facts["profile"] = profile.model_dump(exclude_none=True)
     if fields.get("custom_facts"):
         custom = [
             {"key": fact["key"], "label": fact["label"], "value": fact["value"]}
             for fact in fields["custom_facts"]
-            if profile.kind == "generic" or fact["key"] in custom_keys(profile)
+            if profile.kind == "generic"
+            or fact["key"] in custom_keys(profile)
+            or (
+                fields.get("demo")
+                and fact["key"] in {"demo_data", "story", "languages", "demo_verified"}
+            )
         ]
         if custom:
             facts["custom"] = custom
@@ -391,8 +400,14 @@ class Approval(BaseModel):
 DEMO_ID = re.compile(r"^demo-[a-z0-9-]{1,40}$")
 
 
-def check_demo_seed(bid: str, fields: BusinessFields) -> dict[str, Any]:
-    if not DEMO_ID.fullmatch(bid):
+def check_demo_seed(bid: str, fields: BusinessFields, *, private: bool = False) -> dict[str, Any]:
+    valid_id = bool(DEMO_ID.fullmatch(bid))
+    if not valid_id and private:
+        try:
+            valid_id = UUID(bid).version == 5
+        except ValueError:
+            pass
+    if not valid_id:
         raise ValueError("Demo shop IDs look like demo-katong-kopitiam.")
     if not fields.demo:
         raise ValueError("Seeded shops must be labelled demo.")
@@ -485,9 +500,15 @@ class MerchantRepository(Protocol):
         ...
 
     def seed_demo_shop(
-        self, uid: str, bid: str, fields: BusinessFields, products: list[ProductFields]
+        self,
+        uid: str,
+        bid: str,
+        fields: BusinessFields,
+        products: list[ProductFields],
+        *,
+        public: bool = True,
     ) -> bool:
-        """Create or reset one labelled demo shop (shared, owned by uid). Idempotent: returns
+        """Create or reset one labelled demo shop, owned by uid. Idempotent: returns
         False when the stored shop already matches. Refuses a non-demo ID or someone else's shop."""
         ...
 
@@ -1082,9 +1103,15 @@ class MerchantStore:
         return [shop for bid in bids if (shop := self.public_shop(bid)) is not None]
 
     def seed_demo_shop(
-        self, uid: str, bid: str, fields: BusinessFields, products: list[ProductFields]
+        self,
+        uid: str,
+        bid: str,
+        fields: BusinessFields,
+        products: list[ProductFields],
+        *,
+        public: bool = True,
     ) -> bool:
-        record = check_demo_seed(bid, fields)
+        record = check_demo_seed(bid, fields, private=not public)
         items = {demo_product_id(bid, p): p.model_dump() for p in products}
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -1094,6 +1121,8 @@ class MerchantStore:
             if row:
                 # Never take over a shop someone else owns, even under a demo-looking ID.
                 self.owned(db, uid, bid)
+                if not json.loads(row["fields"]).get("demo"):
+                    raise ValueError("Tour seed cannot replace an unlabelled shop.")
                 stored = {
                     item[0]: json.loads(item[1])
                     for item in db.execute(
@@ -1101,7 +1130,11 @@ class MerchantStore:
                     )
                 }
                 shared = db.execute("SELECT 1 FROM shares WHERE business_id=?", (bid,)).fetchone()
-                if json.loads(row["fields"]) == record and stored == items and shared:
+                if (
+                    json.loads(row["fields"]) == record
+                    and stored == items
+                    and bool(shared) == public
+                ):
                     return False
                 db.execute(
                     "UPDATE businesses SET fields=?, revision=revision+1 WHERE id=?",
@@ -1121,7 +1154,10 @@ class MerchantStore:
                 "INSERT INTO inventory VALUES(?,?,?)",
                 [(pid, bid, json.dumps(item)) for pid, item in items.items()],
             )
-            db.execute("INSERT INTO shares VALUES(?) ON CONFLICT DO NOTHING", (bid,))
+            if public:
+                db.execute("INSERT INTO shares VALUES(?) ON CONFLICT DO NOTHING", (bid,))
+            else:
+                db.execute("DELETE FROM shares WHERE business_id=?", (bid,))
         return True
 
     def attach_demo_owner(self, uid: str, bid: str, owner_uid: str) -> bool:
@@ -1149,7 +1185,7 @@ class MerchantStore:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = self.owned(db, uid, bid)
-            check_demo_seed(bid, BusinessFields.model_validate_json(row["fields"]))
+            check_demo_seed(bid, BusinessFields.model_validate_json(row["fields"]), private=True)
             changed = False
             for inquiry in inquiries:
                 inserted = db.execute(

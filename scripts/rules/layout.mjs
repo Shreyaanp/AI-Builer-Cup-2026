@@ -7,7 +7,11 @@ export function run() {
   const failures = []
   if (!/name:\s*'phone'/.test(read('playwright.config.ts')))
     failures.push('  playwright.config.ts has no "phone" project')
-  if (!/project:\s*\[phone/.test(read('.github/workflows/checks.yml')))
+  const workflow = read('.github/workflows/checks.yml')
+  const runsPhoneProject =
+    /project:\s*\[phone(?:,|\])/.test(workflow) ||
+    /project:\s*\$\{\{[^}]*fromJSON\('\["phone"/.test(workflow)
+  if (!runsPhoneProject)
     failures.push(
       '  .github/workflows/checks.yml: the browser job no longer runs the phone project',
     )

@@ -125,7 +125,8 @@ test('S11 · forecast → PO → ORDRSP (partial) → ASN → invoice, translate
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     const card = page.getByRole('article', { name: 'PO 4500012346' })
     await expect(card).toBeVisible()
-    await expect(card).toContainText(/kg Wheat flour · deliver/)
+    // The authored kirana sells Atta; the older supplier fixture calls it Wheat flour.
+    await expect(card).toContainText(/kg (?:Wheat flour|Atta) · deliver/)
     await expect(card).toContainText('6 kg left, runs out')
     await expect(card).toContainText('Simulation')
     await expect(page.getByRole('log')).toContainText("I've drafted PO 4500012346")
@@ -159,7 +160,7 @@ test('S11 · forecast → PO → ORDRSP (partial) → ASN → invoice, translate
     await snap(page, '3-ordrsp-partial', project, card.getByText(/kg now/))
     await card.getByRole('button', { name: 'Accept changes' }).click()
     await status(card, 'Confirmed')
-    await expect(card).toContainText(/Back-order: \d+ kg Wheat flour/)
+    await expect(card).toContainText(/Back-order: \d+ kg (?:Wheat flour|Atta)/)
   })
 
   await test.step('3 · DESADV, then the goods arrive and stock is reviewed', async () => {

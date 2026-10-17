@@ -3,6 +3,17 @@
 Single place for everything the owner asked for in conversation. PLAN-V2.md holds the plan and
 status; this file holds the owner's intent so nothing is lost across resets. Keep both updated.
 
+## 17 Oct, 05:10 (tour story)
+
+- "The story I want to sell is not there; update the tour account with meaningful data so a
+  person sees the application at its best, all the features it can provide."
+- Two honestly labelled demo worlds: eight Bengaluru shops and five Singapore shops, with
+  local menus, prices, hours, payments and languages. One owner tour shop per world has eight
+  weeks of sales, forecasts, Today, rescue, rewards, replied chats, supplier documents and a
+  playbook; the customer can discover, chat and explore their passport.
+- Use a repeatable, idempotent seed with an explicit reset and a two-minute judge walk.
+  This task is local and uncommitted; production demo preparation is owner-run only.
+
 ## 16 Oct, ~06:00 (Google services)
 
 - Add, each behind a switch with a fallback: Gemini grounding with Google Maps (top priority) and Routes

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +19,25 @@ const freshData = fresh
       MEDIA_DIR: `${dataDir}/media`,
     }
   : {}
+// The local preview and browser stories always start with the same fictional worlds.
+// Run in the foreground before serving; production never runs this development launcher.
+const seed = spawnSync(
+  uv,
+  [
+    'run',
+    '--locked',
+    'python',
+    '-m',
+    'scripts.seed_tour_story',
+    '--sqlite',
+    freshData.MERCHANT_DATABASE || process.env.MERCHANT_DATABASE || 'data/merchant.sqlite3',
+  ],
+  {
+    cwd: backend,
+    stdio: 'inherit',
+  },
+)
+if (seed.status !== 0) process.exit(seed.status ?? 1)
 const child = spawn(uv, ['run', '--locked', 'python', 'run.py'], {
   cwd: backend,
   stdio: 'inherit',

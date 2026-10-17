@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-// First visit: a guided tour on a filled demo shop (menu + six weeks of sales).
+// First visit: a guided tour on a filled demo shop (menu + eight weeks of sales).
 test.skip(({ isMobile }) => !isMobile, '390×844 phone story')
 
 test('guided tour: demo shop is created, eight spotlights, then start your own', async ({

@@ -16,6 +16,7 @@ import structlog
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
+from .community import Community
 from .demand import seed_demo_signals
 from .limits import client_ip, enforce_limits
 from .merchant import BusinessFields, CustomFact, DayHours, MerchantRepository, ProductFields
@@ -443,8 +444,33 @@ def resolve_currency(lat: float, lng: float, place: str, requested: str) -> str:
 
 
 async def ensure_world(
-    store: MerchantRepository, generator: WorldGenerator, body: WorldRequest
+    store: MerchantRepository,
+    generator: WorldGenerator,
+    body: WorldRequest,
+    community: Community | None = None,
 ) -> WorldReceipt:
+    from .tour_catalogue import CENTRES, TOUR_SHOPS
+    from .tour_story import seed_story
+
+    # The two filmed areas use one authored story, independent of the phone's currency or
+    # model mode. Other areas retain the existing generated-neighbourhood behaviour.
+    for city, (lat, lng, *_rest) in CENTRES.items():
+        if abs(body.lat - lat) < 0.02 and abs(body.lng - lng) < 0.02:
+            ids = [s.id for s in TOUR_SHOPS if s.city == city]
+            existed = await anyio.to_thread.run_sync(store.public_shop, ids[0])
+            if community is not None:
+                if generator.settings.app_env == "production":
+                    return WorldReceipt(
+                        shop_ids=ids if existed else [],
+                        created=False,
+                        source="existing" if existed else "disabled",
+                    )
+                await anyio.to_thread.run_sync(lambda: seed_story(store, community))
+                return WorldReceipt(
+                    shop_ids=ids,
+                    created=not bool(existed),
+                    source="existing" if existed else "fixture",
+                )
     body = body.model_copy(update={"currency": area_currency(body.lat, body.lng, body.currency)})
     first = world_id(body.lat, body.lng, 0)
     stored = await anyio.to_thread.run_sync(store.public_shop, first)
@@ -486,4 +512,4 @@ async def demo_world(body: WorldRequest, request: Request) -> WorldReceipt:
     await enforce_limits(request, [("demo:world", client_ip(request))], anonymous=True)
     store: MerchantRepository = request.app.state.merchant
     generator: WorldGenerator = request.app.state.world_generator
-    return await ensure_world(store, generator, body)
+    return await ensure_world(store, generator, body, request.app.state.community)

@@ -100,6 +100,14 @@ async function appearance(page: Page | import('@playwright/test').BrowserContext
 /** Screenshot plus a WCAG 2 A/AA axe pass of whatever is on screen (dialogs included). */
 function recorder(mode: Mode) {
   return async (page: Page, step: string | number) => {
+    // GSAP fades are still running after a stamp arrives. Capture and audit the readable end state.
+    await expect
+      .poll(() =>
+        page
+          .locator('.stamp-line')
+          .evaluateAll((lines) => lines.every((line) => getComputedStyle(line).opacity === '1')),
+      )
+      .toBe(true)
     await shot(page, 9, mode === 'light' ? step : `${step}-dark`)
     const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
     expect(

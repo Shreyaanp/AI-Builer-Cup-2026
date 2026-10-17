@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from google.adk.sessions import InMemorySessionService
 
 from app import retail_recs
-from app.demo_world import world_id
 from app.main import create_app
 from app.retail_recs import (
     AppEvent,
@@ -302,7 +301,7 @@ def test_event_route_accepts_only_real_shops_and_items(tmp_path: Path) -> None:
             json={"lat": 12.9719, "lng": 77.6412, "currency": "INR", "timezone": "Asia/Kolkata"},
         )
         assert made.status_code == 200, made.text
-        bid = world_id(12.9719, 77.6412, 0)
+        bid = made.json()["shop_ids"][0]
         shop = client.get(f"/api/v1/public/shops/{bid}").json()
         item = {"name": shop["products"][0]["name"], "unit": shop["products"][0]["unit"]}
         pipeline = EventPipeline(fake, True, batch=100)

@@ -18,6 +18,7 @@ import { Sheet } from '../v1/Sheet'
 import { useCustomer } from './account'
 import type { Profile } from './types'
 import { useLocale } from '../../state/hooks'
+import { TourStoryButton } from './TourStoryButton'
 import { useAccountCopy } from './copy'
 import { SignInButton } from './SignIn'
 import { preferenceChips } from './preferences'
@@ -152,6 +153,7 @@ export function ProfileSheet({ open, onClose }: { open: boolean; onClose: () => 
             </Box>
           </Stack>
           <Divider />
+          <TourStoryButton onReady={onClose} />
           <Box>
             <Typography variant="titleSmall" component="h3">
               {t.preferences}

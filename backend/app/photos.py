@@ -382,6 +382,13 @@ class PhotoPipeline:
         path.write_bytes(image)
 
     def load_gallery_sync(self, bid: str, photo_id: str) -> bytes | None:
+        from .tour_media import bundled_photo
+
+        # Routes already require membership in an owned/shared shop's gallery. Fixture image
+        # IDs map only to bundled, visibly fictional artwork; no cloud image fetch is needed.
+        bundled = bundled_photo(photo_id)
+        if bundled is not None:
+            return bundled
         if self.settings.media_bucket:
             blob = self._gallery_bucket().blob(f"shops/{bid}/{photo_id}.jpg")
             return blob.download_as_bytes() if blob.exists() else None

@@ -559,6 +559,7 @@ async def today(
             store(request),
             generator,
             WorldRequest(lat=lat, lng=lng, currency=currency, timezone=timezone, place=place),
+            community(request),
         )
         shops = await nearby(request, lat, lng)
     principal = await identity(request).customer(request)

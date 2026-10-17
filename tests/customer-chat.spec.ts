@@ -2,15 +2,26 @@ import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
 // Account 2 customer story: ask → open a shop → follow → sign in to chat → labelled demo
-// reply → the thread in Chats and the shop's updates in Saved. Needs the Singapore demo shops:
-//   cd backend && uv run python -m scripts.seed_demo_shops --sqlite data/merchant.sqlite3 --city singapore
-const SHOP = 'demo-tiong-bahru-bakery'
+// reply → Chats and Saved. Local dev seeds the same tour story before serving.
+const SHOP = 'demo-story-singapore-bakery'
 const shots = (name: string) => `docs/stories/${name}.png`
 
 test.beforeEach(async ({ page, request }) => {
   const seeded = await request.get(`/api/v1/public/shops/${SHOP}`)
-  test.skip(!seeded.ok(), 'Seed the Singapore demo shops first (see the comment above)')
-  await page.addInitScript(() => localStorage.setItem('chalkboard.customer.journey', 'done'))
+  expect(seeded.ok(), 'Local dev must seed the tour story before serving').toBeTruthy()
+  await page.addInitScript(() => {
+    localStorage.setItem('chalkboard.customer.journey', 'done')
+    localStorage.setItem(
+      'chalkboard.discover.filters',
+      JSON.stringify({
+        place: {
+          lat: 1.3052,
+          lng: 103.9045,
+          label: 'Katong',
+        },
+      }),
+    )
+  })
   await page.route('**/*', (route) =>
     ['127.0.0.1', 'localhost'].includes(new URL(route.request().url()).hostname)
       ? route.continue()
@@ -43,11 +54,9 @@ test('customer story: ask, follow, sign in to chat, demo reply, Chats and Saved'
   const nav = page.getByRole('navigation', { name: 'Main' })
   await expect(nav.getByRole('link', { name: 'Ask' })).toHaveAttribute('aria-current', 'page')
   await shot('C-1-ask')
-  await page
-    .getByRole('textbox', { name: 'Ask about anything nearby' })
-    .fill('croissant in Tiong Bahru')
+  await page.getByRole('textbox', { name: 'Ask about anything nearby' }).fill('croissant in Katong')
   await page.getByRole('button', { name: 'Send', exact: true }).click()
-  const answers = page.getByRole('article', { name: 'croissant in Tiong Bahru' })
+  const answers = page.getByRole('article', { name: 'croissant in Katong' })
   await expect(answers.getByRole('link').first()).toBeVisible({ timeout: 15_000 })
   await page.waitForTimeout(1600)
   await shot('C-2-results')
@@ -56,7 +65,7 @@ test('customer story: ask, follow, sign in to chat, demo reply, Chats and Saved'
   const card = page.locator(`a[href="/explore/s/${SHOP}"]`).first()
   if (await card.isVisible()) await card.click()
   else await page.goto(`/explore/s/${SHOP}`)
-  const name = 'Crumb & Courtyard Bakery (Demo)'
+  const name = 'Crumb & Courtyard (Demo)'
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible({ timeout: 15_000 })
 
   // 3. Follow while signed out: kept on this device.
@@ -146,14 +155,14 @@ test('personalisation: stated preferences are remembered, rank For you, and can 
   await page.reload()
   await page
     .getByRole('textbox', { name: 'Ask about anything nearby' })
-    .fill("I'm vegetarian, croissant in Tiong Bahru")
+    .fill("I'm vegetarian, croissant in Katong")
   await page.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Remembered:' })).toContainText(
     'Vegetarian',
     { timeout: 15_000 },
   )
   // "For you" picks lead the answer, each saying why.
-  const forYou = page.getByRole('article', { name: "I'm vegetarian, croissant in Tiong Bahru" })
+  const forYou = page.getByRole('article', { name: "I'm vegetarian, croissant in Katong" })
   await expect(forYou.getByText(/You follow this shop|Vegetarian options/).first()).toBeVisible()
   await page.waitForTimeout(1600)
   if (isMobile) await page.screenshot({ path: shots('C-8-for-you') })

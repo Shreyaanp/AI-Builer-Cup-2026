@@ -477,9 +477,15 @@ class FirestoreMerchantStore:
         return [shop for row in rows if (shop := self.public_shop(row.id)) is not None]
 
     def seed_demo_shop(
-        self, uid: str, bid: str, fields: BusinessFields, products: list[ProductFields]
+        self,
+        uid: str,
+        bid: str,
+        fields: BusinessFields,
+        products: list[ProductFields],
+        *,
+        public: bool = True,
     ) -> bool:
-        record = check_demo_seed(bid, fields)
+        record = check_demo_seed(bid, fields, private=not public)
         ref = self.businesses.document(bid)
         items = {product_key(p.name, p.unit): p.model_dump() for p in products}
 
@@ -494,14 +500,16 @@ class FirestoreMerchantStore:
             if snapshot.exists:
                 # Never take over a shop someone else owns, even under a demo-looking ID.
                 data = self.owned(snapshot, uid)
+                if not data["fields"].get("demo"):
+                    raise ValueError("Tour seed cannot replace an unlabelled shop.")
                 if (
                     data["fields"] == record
-                    and data.get("public")
+                    and bool(data.get("public")) == public
                     and {pid: row["fields"] for pid, row in stored} == items
                 ):
                     return False
                 transaction.update(
-                    ref, {"fields": record, "revision": data["revision"] + 1, "public": True}
+                    ref, {"fields": record, "revision": data["revision"] + 1, "public": public}
                 )
             else:
                 transaction.create(
@@ -511,7 +519,7 @@ class FirestoreMerchantStore:
                         "revision": 1,
                         "status": "draft",
                         "owners": [uid],
-                        "public": True,
+                        "public": public,
                         "created": now,
                     },
                 )
@@ -550,7 +558,7 @@ class FirestoreMerchantStore:
         @firestore.transactional
         def run(transaction: Any) -> bool:
             data = self.owned(ref.get(transaction=transaction), uid)
-            check_demo_seed(bid, BusinessFields.model_validate(data["fields"]))
+            check_demo_seed(bid, BusinessFields.model_validate(data["fields"]), private=True)
             records = [
                 (ref.collection("inquiries").document(document_id(i.id, "Invalid inquiry.")), i)
                 for i in inquiries

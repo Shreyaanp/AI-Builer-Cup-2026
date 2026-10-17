@@ -175,14 +175,14 @@ SHOPS = [
 ]
 
 
-def sales_history(demo: DemoShop, today: date) -> list[dict[str, Any]]:
+def sales_history(demo: DemoShop, today: date, days: int = 42) -> list[dict[str, Any]]:
     """Stable per date/item: weekly seasonality, a small trend, and bounded noise.
 
     End yesterday in the shop's timezone; today's trading is never invented as a full day.
     Stable absolute dates also keep overlapping days identical when rerun tomorrow.
     """
     rows = []
-    for offset in range(42, 0, -1):
+    for offset in range(days, 0, -1):
         day = today - timedelta(days=offset)
         for index, product in enumerate(demo.products):
             rng = Random(f"{demo.id}/{product.name}/{day}")

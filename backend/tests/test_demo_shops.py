@@ -21,6 +21,15 @@ from tests.test_photos import join
 pytest_plugins = ("tests.test_merchant_store",)
 
 
+def test_private_seed_is_never_shared_and_is_idempotent(store: MerchantRepository) -> None:
+    demo = SHOPS[0]
+    assert store.seed_demo_shop("owner", demo.id, demo.fields, demo.products, public=False)
+    assert store.public_shop(demo.id) is None
+    assert store.inventory("owner", demo.id)
+    assert not store.seed_demo_shop("owner", demo.id, demo.fields, demo.products, public=False)
+    assert store.public_shop(demo.id) is None
+
+
 def test_demo_seed_is_idempotent_and_labelled(store: MerchantRepository) -> None:
     assert [changed for _, changed in seed(store, "demo-owner")] == [True] * len(SHOPS)
     first = {shop["id"]: shop for shop in store.shared_shops()}
