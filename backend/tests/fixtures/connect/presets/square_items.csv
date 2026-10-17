@@ -1,0 +1,6 @@
+Token,Item Name,Variation Name,SKU,Description,Categories,Reporting Category,Price,Archived,Sellable,Stockable,Current Quantity Main Street
+ITM001,Flat White,Regular,FW-1,,Coffee,Coffee,4.50,N,Y,N,
+ITM002,Latte,Small,LA-S,,Coffee,Coffee,4.00,N,Y,N,
+ITM002,Latte,Large,LA-L,,Coffee,Coffee,5.00,N,Y,N,
+ITM003,Butter Croissant,Regular,BC-1,,Bakery,Bakery,3.25,N,Y,Y,18
+ITM004,Banana Bread,Regular,BB-1,,Bakery,Bakery,3.75,N,Y,Y,9

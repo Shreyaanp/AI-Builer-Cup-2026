@@ -1,0 +1,4 @@
+Date,Receipt number,Receipt type,Category,SKU,Item,Variant,Modifiers applied,Quantity,Gross sales,Discounts,Net sales,Cost of goods,Gross profit,Taxes
+10/15/2026 9:05 AM,1-1001,Sale,Beverages,MC-1,Masala Chai,,,3,75.00,0.00,75.00,24.00,51.00,0.00
+10/15/2026 9:40 AM,1-1002,Sale,Beverages,CC-L,Cold Coffee,Large,,1,80.00,10.00,70.00,28.00,42.00,0.00
+10/16/2026 5:15 PM,1-1003,Sale,Snacks,VP-1,Veg Puff,,,4,80.00,0.00,80.00,36.00,44.00,0.00

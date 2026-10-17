@@ -1,0 +1,9 @@
+{"items":[
+{"id":"i-chai","handle":"masala-chai","item_name":"Masala Chai","category_id":"c-bev","track_stock":false,"sold_by_weight":false,"variants":[
+ {"variant_id":"v-chai","item_id":"i-chai","sku":"MC-1","option1_value":null,"default_price":25.0,"stores":[{"store_id":"s-1","pricing_type":"FIXED","price":25.0,"available_for_sale":true}]}]},
+{"id":"i-cc","handle":"cold-coffee","item_name":"Cold Coffee","category_id":"c-bev","track_stock":false,"sold_by_weight":false,"variants":[
+ {"variant_id":"v-cc-r","item_id":"i-cc","sku":"CC-R","option1_value":"Regular","default_price":60.0,"stores":[]},
+ {"variant_id":"v-cc-l","item_id":"i-cc","sku":"CC-L","option1_value":"Large","default_price":80.0,"stores":[]}]},
+{"id":"i-puff","handle":"veg-puff","item_name":"Veg Puff","category_id":"c-snk","track_stock":true,"sold_by_weight":false,"variants":[
+ {"variant_id":"v-puff","item_id":"i-puff","sku":"VP-1","option1_value":null,"default_price":null,"stores":[{"store_id":"s-1","pricing_type":"FIXED","price":20.0,"available_for_sale":true}]}]}
+],"cursor":null}

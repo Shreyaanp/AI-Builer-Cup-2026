@@ -1,0 +1,5 @@
+Handle,REF,Name,Category,Description,Sold by weight,Option 1 name,Option 1 value,Option 2 name,Option 2 value,Option 3 name,Option 3 value,Variant SKU,Barcode,Price [Main store],Cost,In stock [Main store],Low stock [Main store]
+masala-chai,MC,Masala Chai,Beverages,,N,,,,,,,MC-1,,25.00,8.00,,
+cold-coffee,CC,Cold Coffee,Beverages,,N,Size,Regular,,,,,CC-R,,60.00,20.00,,
+cold-coffee,CC,Cold Coffee,Beverages,,N,Size,Large,,,,,CC-L,,80.00,28.00,,
+veg-puff,VP,Veg Puff,Snacks,,N,,,,,,,VP-1,,20.00,9.00,40,10

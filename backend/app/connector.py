@@ -156,6 +156,7 @@ class ConnectorResult(BaseModel):
     last_synced: float | None = None
     diff: dict[str, list[dict[str, Any]]] | None = None
     warnings: list[str] = Field(default_factory=list)
+    preset: str | None = Field(default=None, description="Built-in mapping used, e.g. Square")
 
 
 # ── JSON parser ──────────────────────────────────────────────────────────────

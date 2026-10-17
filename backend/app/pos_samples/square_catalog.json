@@ -1,0 +1,13 @@
+{"objects":[
+{"type":"CATEGORY","id":"CATCOFFEE","category_data":{"name":"Coffee"}},
+{"type":"CATEGORY","id":"CATBAKERY","category_data":{"name":"Bakery"}},
+{"type":"ITEM","id":"ITEMFW","item_data":{"name":"Flat White","categories":[{"id":"CATCOFFEE"}],"variations":[
+ {"type":"ITEM_VARIATION","id":"VARFW","item_variation_data":{"item_id":"ITEMFW","name":"Regular","sku":"FW-1","pricing_type":"FIXED_PRICING","price_money":{"amount":450,"currency":"SGD"}}}]}},
+{"type":"ITEM","id":"ITEMLA","item_data":{"name":"Latte","categories":[{"id":"CATCOFFEE"}],"variations":[
+ {"type":"ITEM_VARIATION","id":"VARLAS","item_variation_data":{"item_id":"ITEMLA","name":"Small","sku":"LA-S","pricing_type":"FIXED_PRICING","price_money":{"amount":400,"currency":"SGD"}}},
+ {"type":"ITEM_VARIATION","id":"VARLAL","item_variation_data":{"item_id":"ITEMLA","name":"Large","sku":"LA-L","pricing_type":"FIXED_PRICING","price_money":{"amount":500,"currency":"SGD"}}}]}},
+{"type":"ITEM","id":"ITEMBC","item_data":{"name":"Butter Croissant","category_id":"CATBAKERY","variations":[
+ {"type":"ITEM_VARIATION","id":"VARBC","item_variation_data":{"item_id":"ITEMBC","name":"Regular","sku":"BC-1","pricing_type":"FIXED_PRICING","price_money":{"amount":325,"currency":"SGD"}}}]}},
+{"type":"ITEM","id":"ITEMTEA","item_data":{"name":"Iced Tea (open price)","variations":[
+ {"type":"ITEM_VARIATION","id":"VARTEA","item_variation_data":{"item_id":"ITEMTEA","name":"Regular","pricing_type":"VARIABLE_PRICING"}}]}}
+]}

@@ -81,6 +81,7 @@ from .photos import PhotoPipeline
 from .planning_routes import router as planning_router
 from .playbook import PlaybookWriter
 from .playbook_routes import router as playbook_router
+from .pos_live_routes import router as pos_live_router
 from .recap import RecapWriter
 from .recs_routes import router as recs_router
 from .replay import FirestoreTurns, RemoteTurn, ReplayStore, TurnReplay
@@ -281,6 +282,7 @@ def create_app(
     app.include_router(merchant_router)
     app.include_router(icon_router)
     app.include_router(connector_router)
+    app.include_router(pos_live_router)
     app.include_router(google_sim_router)
     app.include_router(planning_router)
     app.include_router(sales_router)

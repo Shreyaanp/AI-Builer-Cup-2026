@@ -1,0 +1,12 @@
+{"receipts":[
+{"receipt_number":"1-1001","receipt_type":"SALE","receipt_date":"2026-10-15T09:05:00.000Z","created_at":"2026-10-15T09:05:03.000Z","cancelled_at":null,"line_items":[
+ {"id":"l1","item_id":"i-chai","variant_id":"v-chai","item_name":"Masala Chai","variant_name":null,"sku":"MC-1","quantity":3.0,"price":25.0,"gross_total_money":75.0,"total_money":75.0,"total_discount":0.0}]},
+{"receipt_number":"1-1002","receipt_type":"SALE","receipt_date":"2026-10-15T09:40:00.000Z","created_at":"2026-10-15T09:40:02.000Z","cancelled_at":null,"line_items":[
+ {"id":"l2","item_id":"i-cc","variant_id":"v-cc-l","item_name":"Cold Coffee","variant_name":"Large","sku":"CC-L","quantity":1.0,"price":80.0,"gross_total_money":80.0,"total_money":70.0,"total_discount":10.0}]},
+{"receipt_number":"1-1003","receipt_type":"SALE","receipt_date":"2026-10-16T17:15:00.000Z","created_at":"2026-10-16T17:15:04.000Z","cancelled_at":null,"line_items":[
+ {"id":"l3","item_id":"i-puff","variant_id":"v-puff","item_name":"Veg Puff","variant_name":null,"sku":"VP-1","quantity":4.0,"price":20.0,"gross_total_money":80.0,"total_money":80.0,"total_discount":0.0}]},
+{"receipt_number":"1-1004","receipt_type":"REFUND","receipt_date":"2026-10-16T18:00:00.000Z","created_at":"2026-10-16T18:00:00.000Z","cancelled_at":null,"line_items":[
+ {"id":"l4","item_id":"i-puff","variant_id":"v-puff","item_name":"Veg Puff","variant_name":null,"sku":"VP-1","quantity":1.0,"price":20.0,"gross_total_money":20.0,"total_money":20.0,"total_discount":0.0}]},
+{"receipt_number":"1-1005","receipt_type":"SALE","receipt_date":"2026-10-16T18:30:00.000Z","created_at":"2026-10-16T18:30:00.000Z","cancelled_at":"2026-10-16T18:31:00.000Z","line_items":[
+ {"id":"l5","item_id":"i-chai","variant_id":"v-chai","item_name":"Masala Chai","variant_name":null,"sku":"MC-1","quantity":9.0,"price":25.0,"gross_total_money":225.0,"total_money":225.0,"total_discount":0.0}]}
+],"cursor":null}

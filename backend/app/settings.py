@@ -23,6 +23,20 @@ class Settings(BaseSettings):
     # The Cloud Scheduler service account allowed to run the export, and its OIDC audience.
     analytics_export_caller: str = ""
     analytics_export_audience: str = ""
+    # Live POS pulls (Square sandbox, Loyverse). "offline" (default) answers every pull from
+    # recorded sample responses; "live" calls the vendor API when its token is set, and falls
+    # back to the samples when it is not or when the call fails. Tokens come from the
+    # environment (Secret Manager on Cloud Run), never from the repository.
+    pos_live: Literal["offline", "live"] = "offline"
+    square_sandbox_token: SecretStr = SecretStr("")
+    square_sandbox_location_id: str = ""
+    # "google-connectors": the Square pull goes through an existing Google Cloud Integration
+    # Connectors connection (pos_connectors.py), then falls back to the direct API, then to
+    # the samples. Connections are created and suspended by the owner, never by the app.
+    pos_source: Literal["direct", "google-connectors"] = "direct"
+    connectors_location: str = Field(default="asia-south1", pattern=r"^[a-z0-9-]{3,40}$")
+    square_connection: str = Field(default="square-sandbox", pattern=r"^[a-z0-9-]{1,63}$")
+    loyverse_token: SecretStr = SecretStr("")
     weather_backend: Literal["disabled", "offline", "open_meteo"] = "offline"
     auth_mode: Literal["local", "firebase"] = "local"
     session_database_url: str = "sqlite+aiosqlite:///./data/sessions.sqlite3"

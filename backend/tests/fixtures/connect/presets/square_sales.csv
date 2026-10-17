@@ -1,0 +1,4 @@
+Date,Time,Time Zone,Category,Item,Qty,Price Point Name,SKU,Modifiers Applied,Gross Sales,Discounts,Net Sales,Tax,Transaction ID,Payment ID,Device Name,Notes,Details,Event Type,Location,Dining Option,Customer ID,Customer Name,Customer Reference ID,Unit,Count,Itemization Type,Commission,Fulfillment Note
+2026-10-15,08:12:44,Asia/Singapore,Coffee,Flat White,2,Regular,FW-1,,9.00,0.00,9.00,0.63,TX1,PM1,Counter,,,Payment,Main Street,For Here,,,,,1,Physical Item,0.00,
+2026-10-15,09:03:10,Asia/Singapore,Coffee,Latte,1,Large,LA-L,,5.00,0.50,4.50,0.32,TX2,PM2,Counter,,,Payment,Main Street,To Go,,,,,1,Physical Item,0.00,
+2026-10-16,08:40:01,Asia/Singapore,Bakery,Butter Croissant,3,Regular,BC-1,,9.75,0.00,9.75,0.68,TX3,PM3,Counter,,,Payment,Main Street,For Here,,,,,1,Physical Item,0.00,

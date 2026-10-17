@@ -40,6 +40,7 @@ from .limits import enforce_limits
 from .merchant import ProductFields, ProposalRequest
 from .merchant_routes import consented_owner, owner, store
 from .money import to_minor
+from .pos_presets import detect_preset, prepare_rows, preset_mapping
 from .product_categories import suggest_category
 from .region import shop_currency
 from .sales import daily_sales
@@ -174,6 +175,7 @@ async def analyze_export(
     )
     reused = False
     last_synced = None
+    mapping: ConnectorMapping | None = None
     if saved_record and saved_record.get("fields"):
         try:
             mapping = ConnectorMapping(**saved_record["fields"])
@@ -181,12 +183,17 @@ async def analyze_export(
             reused = True
             last_synced = saved_record.get("last_synced")
         except Exception:
-            mapping = await ai_map_fields(
+            mapping = None
+    preset = detect_preset(headers)
+    if preset:
+        rows = prepare_rows(preset, headers, rows)
+    if mapping is None:
+        mapping = (
+            preset_mapping(preset, headers, rows)
+            if preset
+            else await ai_map_fields(
                 request.app.state.column_mapper, headers, rows[:15], resolved_source
             )
-    else:
-        mapping = await ai_map_fields(
-            request.app.state.column_mapper, headers, rows[:15], resolved_source
         )
 
     validate_mapping(mapping, headers)
@@ -209,6 +216,7 @@ async def analyze_export(
         last_synced=last_synced,
         diff=diff,
         warnings=[],
+        preset=preset.label if preset and not reused else None,
     )
 
 
@@ -278,8 +286,27 @@ async def sync_export(
     if not rows:
         raise HTTPException(422, "EMPTY_FILE")
 
+    if preset := detect_preset(headers):
+        rows = prepare_rows(preset, headers, rows)
     validate_mapping(mapping, headers)
+    return await build_import(
+        request, uid, business_id, context, mapping, headers, rows, resolved_source
+    )
 
+
+async def build_import(
+    request: Request,
+    uid: str,
+    business_id: str,
+    context: dict[str, Any],
+    mapping: ConnectorMapping,
+    headers: list[str],
+    rows: list[list[str]],
+    resolved_source: str,
+) -> dict[str, Any]:
+    """Turn a mapped table, uploaded or pulled live, into a review proposal. Never saves it."""
+    service = store(request)
+    business = context["business"]
     _, _, col_map = apply_mapping(mapping, headers, rows)
     now = time.time()
 
