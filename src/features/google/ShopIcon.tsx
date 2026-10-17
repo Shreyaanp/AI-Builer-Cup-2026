@@ -3,24 +3,9 @@ import { Alert, Box, Button, CircularProgress, Stack, Typography, useTheme } fro
 import { ImagePlus, Sparkles, Trash2 } from 'lucide-react'
 import { useWorkspace } from '../v1/workspaceContext'
 import { shape } from '../../design/theme'
+import { useShopIconCopy } from './shopIconStrings'
 
 const PHOTO_TYPES = 'image/jpeg,image/png,image/webp'
-
-const copy = {
-  title: 'Shop icon',
-  tip: 'A small square picture shown on your shop card, customer page and the map.',
-  make: 'Make my icon',
-  makeAgain: 'Make a new icon',
-  upload: 'Upload a picture',
-  remove: 'Remove icon',
-  making: 'Drawing your icon…',
-  saving: 'Saving your icon…',
-  limit: 'You have made 3 icons today. Upload a picture, or try again tomorrow.',
-  aiOff: 'Icon drawing is not available right now. Upload a picture instead.',
-  failed: 'The icon could not be made. Your old icon is kept; try again or upload a picture.',
-  uploadFailed: 'That picture could not be used. Try a JPEG or PNG photo.',
-  offline: 'You are offline. Connect and try again.',
-}
 
 /** Centre-crop to a square in the browser so the upload is small; null when it cannot decode. */
 async function squareFile(file: File, side = 512): Promise<Blob | null> {
@@ -73,6 +58,7 @@ function Monogram({ name, size }: { name: string; size: number }) {
 
 export function ShopIcon() {
   const ws = useWorkspace()
+  const copy = useShopIconCopy()
   const shop = ws.active
   const roles = useTheme().material
   const [busy, setBusy] = useState<'make' | 'save' | null>(null)
