@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { carried, pushEntry, replaceEntry } from '../../app/history'
 
 export type OwnerFeature = 'guide' | 'payments'
 const featureChanged = 'ownerfeaturechange'
@@ -21,8 +22,8 @@ export function openOwnerFeature(feature: OwnerFeature | null) {
   else url.searchParams.delete('feature')
   // Preserve the underlying draft/overlay marker so returning from a feature does
   // not look like popping that draft's own history entry.
-  if (feature) history.pushState(history.state, '', url)
-  else history.replaceState(history.state, '', url)
+  if (feature) pushEntry(url, carried())
+  else replaceEntry(url)
   // A feature change is not Back: the overlay/draft history stack owns real popstate events.
   window.dispatchEvent(new Event(featureChanged))
 }

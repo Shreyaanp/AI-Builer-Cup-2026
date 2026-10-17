@@ -253,6 +253,7 @@ function CoachScreen({
   const touch = useMediaQuery('(pointer: coarse)')
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [photoMenu, setPhotoMenu] = useState<HTMLElement | null>(null)
+  useBackClose(Boolean(photoMenu), () => setPhotoMenu(null))
   const [sales, setSales] = useState<SalesImport | null>(null)
   const [connectOpen, setConnectOpen] = useState(false)
   const connectCopy = useConnectCopy()

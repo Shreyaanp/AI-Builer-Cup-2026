@@ -1,3 +1,4 @@
+import { carried, pushEntry } from '../../app/history'
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -276,7 +277,7 @@ export function StampCard({
           sx={{ mt: 3 }}
           disabled={unavailable}
           onClick={() => {
-            history.pushState({ ...(history.state as object | null), rewardRedeem: shop }, '')
+            pushEntry(null, { ...carried(), rewardRedeem: shop })
             setFailedClaim(false)
             setRedeeming(true)
           }}

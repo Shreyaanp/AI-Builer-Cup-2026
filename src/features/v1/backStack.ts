@@ -1,4 +1,5 @@
 import { createContext, use, useEffect, useRef, useSyncExternalStore } from 'react'
+import { carried, entryState, lastDirection, pushEntry, replaceEntry } from '../../app/history'
 
 /**
  * The phone's back button closes the top sheet or dialog first. Every open overlay owns one
@@ -9,13 +10,13 @@ import { createContext, use, useEffect, useRef, useSyncExternalStore } from 'rea
  * owner sees an in-app "Discard changes?" first, and leaving the page asks the browser's own
  * beforeunload question.
  *
- * Only the owner app turns this on (BackHistory). Customer pages keep their own URL history
- * (Discover's ?view=map, shop links), which a second history owner would fight with.
+ * Both apps turn this on (BackHistory). Pages and tabs are their own entries (app/history.ts);
+ * Discover's ?view=map stays a URL of its own.
  */
 export const BackHistory = createContext(false)
 
 interface Entry {
-  id: number
+  id: string
   close: () => void
   dirty: () => boolean
 }
@@ -26,6 +27,8 @@ const queued: Entry[] = []
 // popstate events caused by our own history.back() calls.
 let ignore = 0
 let nextId = 1
+// Ids are unique per page load: a marker left by an earlier load never matches a new sheet.
+const loadTag = Math.random().toString(36).slice(2, 6)
 let pending: Entry | null = null
 // Entries closed in this commit whose history slot is not yet given back. An overlay opening in the
 // same commit (a form handing over to its review) takes the slot over with replaceState instead
@@ -41,8 +44,14 @@ const emit = () => listeners.forEach((listener) => listener())
 
 function pushState(entry: Entry) {
   stack.push(entry)
-  history.pushState({ ...(history.state as object | null), overlay: entry.id }, '')
+  // `sheet` marks the slot this entry owns; `overlay` is also carried by a feature URL above it.
+  pushEntry(null, { ...carried(), overlay: entry.id, sheet: entry.id })
 }
+
+const live = (id: unknown) =>
+  stack.some((entry) => entry.id === id) ||
+  queued.some((entry) => entry.id === id) ||
+  pending?.id === id
 
 function onPopState(event: PopStateEvent) {
   if (ignore > 0) {
@@ -51,9 +60,17 @@ function onPopState(event: PopStateEvent) {
     if (ignore === 0) queued.splice(0).forEach(pushState)
     return
   }
+  // A sheet's slot whose sheet is gone (a link inside it opened a page, or the page was
+  // refreshed) is skipped in the direction of travel, so no Back press lands on nothing.
+  const { sheet } = entryState()
+  if (sheet !== undefined && !live(sheet)) {
+    handledPops.add(event)
+    history.go(lastDirection() > 0 ? 1 : -1)
+    return
+  }
   // A feature URL can sit above this entry without closing it. Landing back on
   // its marker returns to the draft; it does not discard the draft itself.
-  if (stack.at(-1)?.id === history.state?.overlay) return
+  if (stack.at(-1)?.id === entryState().overlay) return
   const top = stack.pop()
   if (!top) return
   handledPops.add(event)
@@ -84,19 +101,19 @@ function flushReleases() {
   history.go(-steps)
 }
 
-function register(close: () => void, dirty: () => boolean): number {
+function register(close: () => void, dirty: () => boolean): string {
   listen()
-  const entry = { id: nextId++, close, dirty }
+  const entry = { id: `${loadTag}-${nextId++}`, close, dirty }
   if (handoff > 0) {
     handoff -= 1
     stack.push(entry)
-    history.replaceState({ ...(history.state as object | null), overlay: entry.id }, '')
+    replaceEntry(null, { overlay: entry.id, sheet: entry.id })
   } else if (ignore > 0) queued.push(entry)
   else pushState(entry)
   return entry.id
 }
 
-function release(id: number) {
+function release(id: string) {
   const waiting = queued.findIndex((entry) => entry.id === id)
   if (waiting >= 0) {
     queued.splice(waiting, 1)
@@ -114,7 +131,7 @@ function release(id: number) {
   stack.splice(index, 1)
   // A route may already have been pushed above this overlay. Never pop that new page
   // while cleaning up a hidden coach's draft guard or an older sheet.
-  if ((history.state as { overlay?: number } | null)?.overlay !== id) return
+  if (entryState().overlay !== id) return
   handoff += 1
   queueMicrotask(flushReleases)
 }

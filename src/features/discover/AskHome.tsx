@@ -1,3 +1,4 @@
+import { carried, pushEntry } from '../../app/history'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -515,7 +516,7 @@ export default function AskHome({
     }
     // The first question gets its own history entry: back returns to the opening page.
     if (turns.length === 0 && !(history.state as { ask?: boolean } | null)?.ask)
-      history.pushState({ ...(history.state as object | null), ask: true }, '')
+      pushEntry(null, { ...carried(), ask: true })
     setTurns((all) => [...all, turn])
     setDraft('')
     setLine(0)

@@ -12,6 +12,8 @@ import { BusinessDialog, ProductDialog } from './EditDialogs'
 import { FaceDialog } from './FaceDialog'
 import { customerShopLink, safeCustomerOrigin } from '../../app/router'
 import { overlayHandled } from './backStack'
+import { tabFromUrl } from './workspaceContext'
+import { entryState, pushEntry, replaceEntry, restoreScroll } from '../../app/history'
 
 function readSpeak() {
   try {
@@ -50,24 +52,31 @@ export function WorkspaceProvider({
     bid: null,
     items: [],
   })
-  const [destination, setDestination] = useState<Destination>('coach')
+  // The tab is in the address (`/?tab=shop`), so a refresh keeps it.
+  const [destination, setDestination] = useState<Destination>(() => tabFromUrl(location.search))
   const [proposal, setProposal] = useState<Proposal | null>(null)
   // Proposals confirmed in this session, so the coach can link a saved change back to the menu.
   const [savedProposals, setSavedProposals] = useState<string[]>([])
   // The route belongs to this workspace, so entering registration preserves the current
   // shop's mounted coach and unsent draft. No merchant data is written to browser storage.
-  // Each phase is a history entry, so Back goes review → conversation → leaves the flow.
+  // Each phase, tab and sub-page is a history entry, so Back goes review → conversation →
+  // leaves the flow, and Shop → Today, with each screen where it was.
   useLayoutEffect(() => {
     const url = new URL(location.href)
-    url.pathname = creatingShop || shopReady ? '/new-shop' : '/'
+    const inFlow = creatingShop || shopReady
+    url.pathname = inFlow ? '/new-shop' : '/'
     if (creatingShop) url.searchParams.set('step', newShopPhase)
     else if (shopReady) url.searchParams.set('step', 'ready')
     else url.searchParams.delete('step')
-    if (url.href !== location.href) {
-      if (creatingShop) history.pushState(null, '', url)
-      else history.replaceState(null, '', url)
-    }
-  }, [creatingShop, shopReady, newShopPhase])
+    if (inFlow || destination === 'coach') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', destination)
+    if (url.href === location.href) return
+    const newTab = !inFlow && tabFromUrl(location.search) !== destination
+    if (creatingShop || newTab) {
+      pushEntry(url)
+      if (newTab) window.scrollTo({ top: 0, behavior: 'instant' })
+    } else replaceEntry(url)
+  }, [creatingShop, shopReady, newShopPhase, destination])
   useEffect(() => {
     const restore = (event: PopStateEvent) => {
       if (overlayHandled(event)) return
@@ -79,6 +88,8 @@ export function WorkspaceProvider({
       setNewShopPhase(
         value === 'manual' ? 'manual' : value === 'chat' || value === 'review' ? 'chat' : 'hero',
       )
+      setDestination(tabFromUrl(location.search))
+      restoreScroll(entryState().scrollY ?? 0)
     }
     window.addEventListener('popstate', restore)
     return () => window.removeEventListener('popstate', restore)

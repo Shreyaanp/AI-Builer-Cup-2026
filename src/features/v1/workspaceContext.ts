@@ -8,6 +8,13 @@ export const PARENT_TAB: Partial<Record<Destination, Destination>> = {
   google: 'grow',
   privacy: 'you',
 }
+const DESTINATIONS: Destination[] = ['coach', 'shop', 'grow', 'you', 'google', 'privacy']
+/** The tab or sub-page an owner address shows (`/?tab=shop`); Coach when there is none. */
+export function tabFromUrl(search: string): Destination {
+  const tab = new URLSearchParams(search).get('tab')
+  return DESTINATIONS.find((item) => item === tab) ?? 'coach'
+}
+
 export type NewShopPhase = 'hero' | 'chat' | 'manual' | 'review'
 
 export interface Workspace {

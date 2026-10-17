@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react'
+import { entryState, pushEntry } from '../../app/history'
 
 export function subscribePath(listener: () => void) {
   window.addEventListener('popstate', listener)
@@ -50,11 +51,14 @@ export function customerNavigate(event: MouseEvent<HTMLElement>) {
   const url = new URL(event.currentTarget.href)
   if (url.origin !== location.origin) return
   event.preventDefault()
-  const old = { ...(history.state as object | null), scrollY: window.scrollY }
-  history.replaceState(old, '')
+  // The page already on screen (a tab tapped again) is not a new step: back to its top.
+  if (url.href === location.href && !url.hash) {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
   const update = () => {
     // Marks an in-app step, so "back" can return to the exact place it came from.
-    history.pushState({ inApp: true }, '', url.pathname + url.search + url.hash)
+    pushEntry(url.pathname + url.search + url.hash, { inApp: true })
     dispatchEvent(new PopStateEvent('popstate'))
     window.scrollTo({ top: 0, behavior: 'instant' })
     if (url.hash)
@@ -72,7 +76,7 @@ export function customerNavigate(event: MouseEvent<HTMLElement>) {
  * link's own target instead.
  */
 export function customerBack(event: MouseEvent<HTMLElement>) {
-  if ((history.state as { inApp?: boolean } | null)?.inApp && event.button === 0) {
+  if (entryState().inApp && event.button === 0) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
     viewTransition(
@@ -92,8 +96,7 @@ export function customerBack(event: MouseEvent<HTMLElement>) {
 
 /** Navigate in the customer app without a click (a spoken command), keeping back/forward. */
 export function goTo(path: string) {
-  history.replaceState({ ...(history.state as object | null), scrollY: window.scrollY }, '')
-  history.pushState({ inApp: true, scrollY: 0 }, '', path)
+  pushEntry(path, { inApp: true })
   dispatchEvent(new PopStateEvent('popstate'))
   window.scrollTo({ top: 0, behavior: 'instant' })
 }

@@ -18,6 +18,31 @@ export function canonicalCustomerPath(path: string): string {
   return path
 }
 
+/**
+ * Where Back goes from a page opened straight from a link (shared shop, QR stamp, a tab):
+ * the screen it belongs under in the app. Null for the app's start screen.
+ */
+export function backTarget(url: URL, app: AppKind): string | null {
+  const keep = new URLSearchParams()
+  const override = url.searchParams.get('app')
+  if (override) keep.set('app', override)
+  const query = keep.size ? `?${keep}` : ''
+  const path = url.pathname
+  if (app === 'customer') {
+    if (/^\/explore\/chats\/[^/]+\/[^/]+\/?$/.test(path)) return `/explore/chats${query}`
+    // A list link (/explore?category=…) is the Browse page, not the start screen.
+    const filtered = [...url.searchParams.keys()].some((key) => key !== 'app')
+    return /^\/explore\/?$/.test(path) && !filtered ? null : `/explore/${query}`
+  }
+  if (app !== 'business') return null
+  const tab = url.searchParams.get('tab')
+  if (path === '/new-shop') return `/${query}`
+  if (path !== '/' || !tab) return null
+  const parent = { google: 'grow', privacy: 'you' }[tab]
+  if (parent) keep.set('tab', parent)
+  return `/${keep.size ? `?${keep}` : ''}`
+}
+
 export function customerShopLink(id: string, origin: string): string {
   return `${origin}/explore/s/${encodeURIComponent(id)}`
 }
