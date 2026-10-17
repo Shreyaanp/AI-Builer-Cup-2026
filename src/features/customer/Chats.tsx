@@ -328,8 +328,42 @@ export function ChatThread({ shop: shopId, thread: threadId }: { shop: string; t
 
   const apply = useCallback((next: ChatSummary | Thread) => {
     setSummary((current) => {
-      if ('shop' in next) return next
-      return current ? { ...current, thread: next } : current
+      if ('shop' in next) {
+        if (
+          !next.thread ||
+          typeof next.thread !== 'object' ||
+          !next.shop ||
+          typeof next.shop !== 'object'
+        )
+          return current
+        return {
+          ...next,
+          shop: { ...next.shop, name: typeof next.shop.name === 'string' ? next.shop.name : '' },
+          thread: {
+            ...next.thread,
+            messages: Array.isArray(next.thread.messages)
+              ? next.thread.messages.filter(
+                  (message) =>
+                    message && typeof message === 'object' && typeof message.id === 'string',
+                )
+              : [],
+          },
+        }
+      }
+      return current && next && typeof next === 'object'
+        ? {
+            ...current,
+            thread: {
+              ...next,
+              messages: Array.isArray(next.messages)
+                ? next.messages.filter(
+                    (message) =>
+                      message && typeof message === 'object' && typeof message.id === 'string',
+                  )
+                : [],
+            },
+          }
+        : current
     })
   }, [])
 
@@ -339,7 +373,20 @@ export function ChatThread({ shop: shopId, thread: threadId }: { shop: string; t
     api<ChatSummary>(path, { signal: abort.signal })
       .then((value) => {
         setLoadFailed(false)
-        setInitial((current) => current ?? new Set(value.thread.messages.map((m) => m.id)))
+        const loadedMessages = Array.isArray(value?.thread?.messages)
+          ? value.thread.messages.filter(
+              (message) => message && typeof message === 'object' && typeof message.id === 'string',
+            )
+          : []
+        setInitial(
+          (current) =>
+            current ??
+            new Set(
+              loadedMessages
+                .filter((message) => message && typeof message.id === 'string')
+                .map((message) => message.id),
+            ),
+        )
         apply(value)
       })
       .catch((error: unknown) => {
@@ -385,7 +432,7 @@ export function ChatThread({ shop: shopId, thread: threadId }: { shop: string; t
     return () => clearInterval(timer)
   }, [live, signedIn, api, path, apply])
 
-  const messages = summary?.thread.messages ?? []
+  const messages = Array.isArray(summary?.thread?.messages) ? summary.thread.messages : []
   const lastId = messages.at(-1)?.id
   useEffect(() => {
     if (!lastId || document.visibilityState !== 'visible') return
@@ -430,7 +477,7 @@ export function ChatThread({ shop: shopId, thread: threadId }: { shop: string; t
   }
 
   const shop = summary?.shop
-  const human = messages.filter((m) => m.kind !== 'ai')
+  const human = messages.filter((m) => m && typeof m === 'object' && m.kind !== 'ai')
   const waiting = !summary?.thread.done && human.length > 0 && human.at(-1)!.author === 'customer'
   const closed = !!summary?.thread.done || !!summary?.thread.blocked
 

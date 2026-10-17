@@ -813,12 +813,15 @@ function CoachScreen({
         signal: AbortSignal.any([operation.signal, AbortSignal.timeout(60_000)]),
       })
       if (!alive.current || operation.signal.aborted) return
-      const notes = result.extraction.uncertain.slice(0, 3).join(' · ')
-      setPhotoPin(result.pin_proposal ?? null)
-      const businessId = activeId ?? result.proposal?.snapshot.business_id
+      const uncertain = Array.isArray(result?.extraction?.uncertain)
+        ? result.extraction.uncertain.filter((note): note is string => typeof note === 'string')
+        : []
+      const notes = uncertain.slice(0, 3).join(' · ')
+      setPhotoPin(result?.pin_proposal ?? null)
+      const businessId = activeId ?? result?.proposal?.snapshot?.business_id
       if (
         businessId &&
-        ['storefront', 'signboard', 'menu', 'price_list'].includes(result.photo_kind)
+        ['storefront', 'signboard', 'menu', 'price_list'].includes(result?.photo_kind ?? '')
       )
         setGalleryPhoto({ file, businessId })
       setMessages((items) =>
@@ -826,13 +829,12 @@ function CoachScreen({
           ...items,
           {
             role: 'assistant' as const,
-            text: result.proposal ? t.photoRead + (notes ? `\n${notes}` : '') : t.photoNothing,
+            text: result?.proposal ? t.photoRead + (notes ? `\n${notes}` : '') : t.photoNothing,
           },
         ].slice(-40),
       )
       // The review sheet carries the reader's doubts, so the decision surface discloses them.
-      if (result.proposal)
-        review({ ...result.proposal, photo_notes: result.extraction.uncertain.slice(0, 5) })
+      if (result?.proposal) review({ ...result.proposal, photo_notes: uncertain.slice(0, 5) })
     } catch (cause) {
       const code = cause instanceof ApiError ? cause.code : ''
       setError(

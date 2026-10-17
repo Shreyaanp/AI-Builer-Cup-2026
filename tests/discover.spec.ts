@@ -3,6 +3,13 @@ import { expect, test, type Page } from '@playwright/test'
 import { english, translations } from '../src/features/discover/strings.ts'
 import { LOCALES } from '../src/i18n/locales.ts'
 
+test('discovery treats a missing places collection as empty', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('chalkboard.customer.journey', 'done'))
+  await page.route('**/api/v1/discover?**', (route) => route.fulfill({ json: { mode: 'live' } }))
+  await page.goto('/discover')
+  await expect(page.getByText('No matches. Try another area or clear your filters.')).toBeVisible()
+})
+
 async function offline(page: Page) {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url())

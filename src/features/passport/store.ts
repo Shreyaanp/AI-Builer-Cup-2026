@@ -77,7 +77,58 @@ export function where(place?: { lat: number; lng: number } | null) {
 }
 
 export function setPassport(view: PassportView) {
-  emit({ view, status: 'ready' })
+  const safe = safePassport(view)
+  if (safe) emit({ view: safe, status: 'ready' })
+}
+
+function safePassport(value: unknown): PassportView | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Partial<PassportView>
+  if (
+    !row.level ||
+    typeof row.level !== 'object' ||
+    !row.streak ||
+    typeof row.streak !== 'object' ||
+    !row.impact ||
+    typeof row.impact !== 'object'
+  )
+    return null
+  const records = (items: unknown) =>
+    Array.isArray(items) ? items.filter((item) => item && typeof item === 'object') : []
+  const perks = records(row.perks).filter(
+    (item) => typeof item.text === 'string' && typeof item.shop_name === 'string',
+  )
+  const shops = records(row.shops).filter(
+    (item) => typeof item.name === 'string' && typeof item.id === 'string',
+  )
+  const quests = records(row.quests)
+    .filter((item) => typeof item.id === 'string' && typeof item.kind === 'string')
+    .map((item) => ({
+      ...item,
+      stops: Array.isArray(item.stops)
+        ? item.stops.filter(
+            (stop: unknown) =>
+              !!stop && typeof stop === 'object' && 'name' in stop && typeof stop.name === 'string',
+          )
+        : [],
+    }))
+  const impact = row.impact as PassportView['impact']
+  return {
+    ...row,
+    stamps: records(row.stamps).filter(
+      (item) => typeof item.shop_id === 'string' && typeof item.kind === 'string',
+    ) as PassportView['stamps'],
+    shops: shops as PassportView['shops'],
+    areas: records(row.areas).filter(
+      (item) => typeof item.id === 'string' && typeof item.name === 'string',
+    ) as PassportView['areas'],
+    quests: quests as PassportView['quests'],
+    perks: perks as PassportView['perks'],
+    impact: {
+      ...impact,
+      saved: impact.saved && typeof impact.saved === 'object' ? impact.saved : {},
+    },
+  } as PassportView
 }
 
 type Api = ReturnType<typeof useCustomer>['api']
@@ -92,13 +143,21 @@ async function load(api: Api, signedIn: boolean, cards: Record<string, number>, 
         body: JSON.stringify({ receipts: pending, cards }),
       })
       clearReceipts()
-      return view
+      return safePassport(view) ?? Promise.reject(new Error('Invalid passport response'))
     }
-    return api<PassportView>(`/api/v1/customer/passport?${query}`)
+    return api<PassportView>(`/api/v1/customer/passport?${query}`).then((view) => {
+      const safe = safePassport(view)
+      if (!safe) throw new Error('Invalid passport response')
+      return safe
+    })
   }
   return api<PassportView>(`/api/v1/public/passport/preview?${query}`, {
     method: 'POST',
     body: JSON.stringify({ receipts: pending, cards }),
+  }).then((view) => {
+    const safe = safePassport(view)
+    if (!safe) throw new Error('Invalid passport response')
+    return safe
   })
 }
 

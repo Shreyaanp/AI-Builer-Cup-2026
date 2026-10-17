@@ -225,10 +225,12 @@ export default function Discover({
         await ensureDemoWorld(lat, lng)
         const response = await fetch('/api/v1/discover?' + params, { signal: abort.signal })
         if (!response.ok) throw new Error('Discovery unavailable')
-        const data = (await response.json()) as Discovery
+        const raw: unknown = await response.json()
+        const data = raw && typeof raw === 'object' ? (raw as Partial<Discovery>) : {}
         if (!abort.signal.aborted) {
           const seen = new Set<string>()
-          const uniquePlaces = data.places.filter((p) => {
+          const uniquePlaces = (Array.isArray(data.places) ? data.places : []).filter((p) => {
+            if (!p || typeof p.name !== 'string' || typeof p.id !== 'string') return false
             const norm = p.name
               .replace(/\s*\((Tour|Demo)\)$/i, '')
               .trim()
@@ -237,7 +239,7 @@ export default function Discover({
             seen.add(norm)
             return true
           })
-          setResult({ ...data, places: uniquePlaces })
+          setResult({ ...(data as Discovery), places: uniquePlaces })
           setStatus('ready')
         }
       } catch {
