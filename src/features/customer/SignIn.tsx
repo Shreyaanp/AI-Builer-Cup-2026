@@ -114,9 +114,11 @@ export function SignInSheet({
           <LockKeyhole size={26} />
         </Box>
         <Typography variant="bodyLarge">{body ?? t.signInBody}</Typography>
-        <Typography variant="bodySmall" color="text.secondary">
-          {t.signInWhy}
-        </Typography>
+        {!body && (
+          <Typography variant="bodySmall" color="text.secondary">
+            {t.signInWhy}
+          </Typography>
+        )}
         <SignInButton onSignedIn={onSignedIn} />
         <Button onClick={onClose}>{t.notNow}</Button>
       </Stack>

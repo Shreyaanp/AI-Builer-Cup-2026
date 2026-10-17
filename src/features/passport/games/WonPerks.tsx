@@ -6,9 +6,15 @@ import { fill, usePassportCopy } from '../copy'
 import { useGameActions } from './api'
 import type { WonPerk } from './api'
 import { useGamesCopy } from './copy'
+import { SignInSheet } from '../../customer/SignIn'
+import { useGuestCopy } from '../../customer/guestCopy'
+import { useCustomer } from '../../customer/account'
 
 /** Prizes won on scratch cards and collection sets, shown at the counter and marked used. */
 export function WonPerks({ perks, signedIn }: { perks: WonPerk[]; signedIn: boolean }) {
+  const account = useCustomer()
+  const guest = useGuestCopy()
+  const [signIn, setSignIn] = useState(false)
   const t = useGamesCopy()
   const p = usePassportCopy()
   const theme = useTheme()
@@ -50,12 +56,16 @@ export function WonPerks({ perks, signedIn }: { perks: WonPerk[]; signedIn: bool
             {perk.used ? (
               <Typography variant="labelLarge">{t.used}</Typography>
             ) : (
-              signedIn && (
+              (signedIn || account.status === 'guest') && (
                 <Button
                   variant="outlined"
                   color="inherit"
                   disabled={busy === perk.id}
                   onClick={() => {
+                    if (!signedIn) {
+                      setSignIn(true)
+                      return
+                    }
                     setBusy(perk.id)
                     markPerkUsed(perk.id)
                       .catch(() => undefined)
@@ -69,6 +79,13 @@ export function WonPerks({ perks, signedIn }: { perks: WonPerk[]; signedIn: bool
           </Stack>
         ))}
       </Stack>
+      <SignInSheet
+        open={signIn}
+        onClose={() => setSignIn(false)}
+        onSignedIn={() => setSignIn(false)}
+        title={guest.title}
+        body={guest.claim}
+      />
     </Box>
   )
 }

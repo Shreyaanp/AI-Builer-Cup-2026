@@ -1,17 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Auth } from 'firebase/auth'
+import { upgradeGoogle } from '../../auth/upgradeGoogle'
 
 export type { Profile } from './types'
 import type { Me, Profile } from './types'
 
 /**
- * The customer's own account. Browsing and instant answers never need it; messaging an owner,
- * syncing follows, preferences and tips do. Hosted: Google sign-in (Firebase). Local and tests:
- * an explicit stand-in session, so the sign-in gate is real everywhere.
+ * The customer's private identity. Guests can chat, follow and play; Google is needed only
+ * for reward claims, rescue reservations and the regulars list. Hosted identities use Firebase;
+ * local sessions are explicit offline stand-ins.
  */
 export interface CustomerAccount {
-  status: 'loading' | 'signed-out' | 'signed-in'
+  status: 'loading' | 'signed-out' | 'guest' | 'signed-in'
   mode: 'local' | 'firebase'
   name: string
   profile: Profile | null
@@ -85,7 +86,7 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     try {
       const me = await api<Me>('/api/v1/customer/me')
-      if (me.signed_in && me.profile) {
+      if ((me.signed_in || me.guest) && me.profile) {
         // Follows made on this device before signing in move into the account.
         const pending = localFollows().filter((id) => !me.profile!.follows.includes(id))
         let latest = me.profile
@@ -104,7 +105,7 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
         }
         setProfile(latest)
         setName(me.name)
-        setStatus('signed-in')
+        setStatus(me.guest ? 'guest' : 'signed-in')
       } else {
         setProfile(null)
         setStatus('signed-out')
@@ -126,10 +127,13 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
         const value = (await response.json()) as {
           auth_mode?: string
           firebase?: Record<string, string>
+          features?: { guest_customer?: boolean }
         }
         if (abort.signal.aborted) return
         if (value.auth_mode !== 'firebase' || !value.firebase) {
           setMode('local')
+          if (value.features?.guest_customer)
+            await api('/api/v1/customer/guest', { method: 'POST' })
           await load()
           return
         }
@@ -148,14 +152,19 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
         firebase.current = {
           auth,
           signIn: async () => {
-            await authSdk.signInWithPopup(auth, new authSdk.GoogleAuthProvider())
+            await upgradeGoogle(auth)
           },
           signOut: () => authSdk.signOut(auth),
         }
         unsubscribe = authSdk.onIdTokenChanged(auth, (user) => {
           if (abort.signal.aborted) return
           if (user) void load()
-          else {
+          else if (value.features?.guest_customer) {
+            void authSdk.signInAnonymously(auth).catch(() => {
+              setStatus('signed-out')
+              setError('unavailable')
+            })
+          } else {
             setProfile(null)
             setStatus('signed-out')
           }
@@ -172,14 +181,17 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
       abort.abort()
       unsubscribe?.()
     }
-  }, [load])
+  }, [load, api])
 
   const signIn = useCallback(async () => {
     setError('')
     try {
       if (mode === 'firebase') {
         await firebase.current?.signIn()
-        return !!firebase.current?.auth.currentUser
+        await load()
+        return (
+          !!firebase.current?.auth.currentUser && !firebase.current.auth.currentUser.isAnonymous
+        )
       }
       await api<Me>('/api/v1/customer/session', {
         method: 'POST',
@@ -206,7 +218,7 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
   }, [api, mode])
 
   const refreshUnread = useCallback(() => {
-    if (status !== 'signed-in') return
+    if (status !== 'signed-in' && status !== 'guest') return
     api<{ unread: number }[]>('/api/v1/customer/threads')
       .then((chats) => setUnread(chats.reduce((sum, chat) => sum + chat.unread, 0)))
       .catch(() => {
@@ -214,7 +226,7 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
       })
   }, [api, status])
   useEffect(() => {
-    if (status !== 'signed-in') return
+    if (status !== 'signed-in' && status !== 'guest') return
     refreshUnread()
     // Owner replies light up the Chats badge while the app is open.
     const timer = setInterval(() => {
@@ -224,13 +236,14 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
   }, [status, refreshUnread])
 
   const follows = useMemo(
-    () => (status === 'signed-in' && profile ? profile.follows : deviceFollows),
+    () =>
+      (status === 'signed-in' || status === 'guest') && profile ? profile.follows : deviceFollows,
     [status, profile, deviceFollows],
   )
 
   const setFollow = useCallback(
     async (id: string, on: boolean) => {
-      if (status === 'signed-in') {
+      if (status === 'signed-in' || status === 'guest') {
         const next = await api<Profile>(`/api/v1/customer/follows/${encodeURIComponent(id)}`, {
           method: on ? 'PUT' : 'DELETE',
         })

@@ -783,7 +783,7 @@ def apply_visit(state: PassportState, visit: Visit) -> Outcome:
     level_before = earned_level(state)
     outcome = Outcome(verdict="stamped", level_before=level_before, level_after=level_before)
     progress = state.shops.get(visit.shop_id)
-    if progress and progress.days and progress.days[-1] == day:
+    if progress and (progress.card_day == day or day in progress.days):
         outcome.verdict = "already_today"
         outcome.card = progress.card
         return outcome

@@ -10,6 +10,7 @@ import type { PassportView } from '../store'
 import { useGameActions } from './api'
 import { useGamesCopy } from './copy'
 import { HowItWorks } from './HowItWorks'
+import { useCustomer } from '../../customer/account'
 
 /** A chalk flame: lit coral and gold while a streak runs, a grey ember when it has not started. */
 export function Flame({ lit, size = 64 }: { lit: boolean; size?: number }) {
@@ -51,6 +52,7 @@ export function StreakFlame({
   view: PassportView
   place?: { lat: number; lng: number } | null
 }) {
+  const account = useCustomer()
   const t = useGamesCopy()
   const p = usePassportCopy()
   const locale = useLocale()
@@ -222,7 +224,7 @@ export function StreakFlame({
           {p.newStreak}
         </Typography>
       )}
-      {view.signed_in ? (
+      {view.signed_in || account.status === 'guest' ? (
         <Stack direction="row" sx={{ mt: 3, gap: 1.5, flexWrap: 'wrap' }}>
           {!run.this_week && !thisFrozen && freezes > 0 && weeks > 0 && (
             <Button

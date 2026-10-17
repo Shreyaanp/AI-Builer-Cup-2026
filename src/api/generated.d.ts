@@ -1003,6 +1003,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{business_id}/inquiries/{inquiry_id}/unblock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unblock Conversation */
+        post: operations["unblock_conversation_api_v1_businesses__business_id__inquiries__inquiry_id__unblock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/shops/{business_id}/inquiries/{inquiry_id}/messages/{message_id}/translation": {
         parameters: {
             query?: never;
@@ -1104,6 +1121,23 @@ export interface paths {
         post: operations["local_sign_in_api_v1_customer_session_post"];
         /** Local Sign Out */
         delete: operations["local_sign_out_api_v1_customer_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/guest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Local Guest */
+        post: operations["local_guest_api_v1_customer_guest_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4313,6 +4347,11 @@ export interface components {
             /** Signed In */
             signed_in: boolean;
             /**
+             * Guest
+             * @default false
+             */
+            guest: boolean;
+            /**
              * Name
              * @default
              */
@@ -6507,6 +6546,11 @@ export interface components {
              * @default false
              */
             google_guide: boolean;
+            /**
+             * Guest Customer
+             * @default false
+             */
+            guest_customer: boolean;
         };
     };
     responses: never;
@@ -8490,6 +8534,38 @@ export interface operations {
             };
         };
     };
+    unblock_conversation_api_v1_businesses__business_id__inquiries__inquiry_id__unblock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_id: string;
+                inquiry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Inquiry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     customer_translation_api_v1_public_shops__business_id__inquiries__inquiry_id__messages__message_id__translation_post: {
         parameters: {
             query?: never;
@@ -8698,6 +8774,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+        };
+    };
+    local_guest_api_v1_customer_guest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
                 };
             };
         };

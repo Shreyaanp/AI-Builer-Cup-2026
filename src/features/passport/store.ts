@@ -108,8 +108,9 @@ export function usePassport(place?: { lat: number; lng: number } | null) {
   const { data } = useRewards()
   const current = useSyncExternalStore(subscribe, () => state)
   const signedIn = account.status === 'signed-in'
+  const identified = signedIn || account.status === 'guest'
   const query = where(place)
-  const cards = signedIn
+  const cards = identified
     ? {}
     : Object.fromEntries(
         // Every card on this phone, empty ones too: a reward claimed here resets the passport.
@@ -121,10 +122,10 @@ export function usePassport(place?: { lat: number; lng: number } | null) {
     if (account.status === 'loading') return
     const ticket = ++loads
     emit({ status: 'loading', key })
-    load(account.api, signedIn, JSON.parse(cardKey) as Record<string, number>, query)
+    load(account.api, identified, JSON.parse(cardKey) as Record<string, number>, query)
       .then((view) => ticket === loads && emit({ view, status: 'ready' }))
       .catch(() => ticket === loads && emit({ status: 'error' }))
-  }, [account.api, account.status, signedIn, cardKey, query, key])
+  }, [account.api, account.status, identified, cardKey, query, key])
   useEffect(() => {
     if (state.key !== key) refresh()
   }, [key, refresh])

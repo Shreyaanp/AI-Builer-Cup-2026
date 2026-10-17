@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Customer data (including guests) is accessed through the FastAPI service only.
+    // Admin SDK calls bypass these rules; the backend verifies every principal and owner.
+    // Anonymous Firebase auth grants no direct reads/writes, including public projections.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

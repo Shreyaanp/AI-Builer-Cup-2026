@@ -10,6 +10,9 @@ import { useGameActions } from './api'
 import type { CoopView } from './api'
 import { useGamesCopy } from './copy'
 import { HowItWorks } from './HowItWorks'
+import { SignInSheet } from '../../customer/SignIn'
+import { useGuestCopy } from '../../customer/guestCopy'
+import { useCustomer } from '../../customer/account'
 
 /**
  * The neighbourhood goal (docs/research/gamification.md §5): one shared bar for the area's
@@ -27,6 +30,9 @@ export function CoopGoal({
   place?: { lat: number; lng: number } | null
   compact?: boolean
 }) {
+  const account = useCustomer()
+  const guest = useGuestCopy()
+  const [signIn, setSignIn] = useState(false)
   const t = useGamesCopy()
   const p = usePassportCopy()
   const locale = useLocale()
@@ -182,7 +188,7 @@ export function CoopGoal({
           </Typography>
         </>
       )}
-      {coop.reached && coop.you > 0 && signedIn ? (
+      {coop.reached && coop.you > 0 && (signedIn || account.status === 'guest') ? (
         coop.claimed ? (
           <Typography variant="titleSmall" role="status" sx={{ mt: 2, fontWeight: 700 }}>
             {t.coopClaimed}
@@ -195,7 +201,7 @@ export function CoopGoal({
             <Button
               variant="contained"
               disabled={busy}
-              onClick={() => void collect()}
+              onClick={() => (signedIn ? void collect() : setSignIn(true))}
               sx={{ alignSelf: 'flex-start' }}
             >
               {fill(t.coopClaim, { n: number(coop.bonus) })}
@@ -210,6 +216,13 @@ export function CoopGoal({
           </Typography>
         )
       )}
+      <SignInSheet
+        open={signIn}
+        onClose={() => setSignIn(false)}
+        onSignedIn={() => setSignIn(false)}
+        title={guest.title}
+        body={guest.claim}
+      />
       {failed && (
         <Alert severity="warning" sx={{ mt: 2 }}>
           {t.coopFailed}

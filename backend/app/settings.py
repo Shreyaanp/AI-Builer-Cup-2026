@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     release_commit: str = "local"
     customer_origin: str = ""
     v1_enabled: bool = False
+    guest_customer: bool = False
     feature_google_guide: bool = True
     merchant_backend: Literal["sqlite", "firestore"] = "sqlite"
     embedding_model: str = "gemini-embedding-2"

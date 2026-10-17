@@ -67,6 +67,7 @@ LIMITS: dict[str, tuple[tuple[int, int], ...]] = {
     "thread:owner": ((60, 60),),
     # Signed-in customers: messages across all their threads, and neighbour tips.
     "thread:customer": ((20, 60), (300, 86_400)),
+    "thread:guest": ((10, 60), (100, 86_400)),
     "tips": ((5, 600), (20, 86_400)),
     # Passport stamp attempts (QR scans) and the Today feed.
     "passport": ((20, 60), (200, 86_400)),

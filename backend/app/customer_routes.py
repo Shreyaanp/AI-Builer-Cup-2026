@@ -53,7 +53,16 @@ async def ask(business_id: str, body: Question, request: Request) -> Answer:
 async def inquire(business_id: str, body: InquiryInput, request: Request) -> InquiryReceipt:
     # Owners talk to real people only: a new conversation needs a signed-in customer (Q8).
     # Browsing and instant answers stay anonymous; the app starts threads via /customer/....
-    await request.app.state.services.identity.require_customer(request)
+    from .community_routes import customer_contact, display_name
+
+    principal = await request.app.state.services.identity.require_customer(request)
+    if request.app.state.v1_settings.guest_customer:
+        body = body.model_copy(
+            update={
+                "name": display_name(principal),
+                "contact": await customer_contact(request, principal),
+            }
+        )
     await shared(request, business_id)
     await enforce_limits(
         request, [("inquire:ip", business_id + ":" + client_ip(request))], anonymous=True
@@ -166,6 +175,16 @@ async def block_conversation(business_id: str, inquiry_id: str, request: Request
     uid = await consented_owner(request)
     result = await anyio.to_thread.run_sync(
         store(request).thread_action, uid, business_id, inquiry_id, "", "block"
+    )
+    thread_signals(request).wake(business_id)
+    return result
+
+
+@router.post("/businesses/{business_id}/inquiries/{inquiry_id}/unblock", response_model=Inquiry)
+async def unblock_conversation(business_id: str, inquiry_id: str, request: Request) -> Inquiry:
+    uid = await consented_owner(request)
+    result = await anyio.to_thread.run_sync(
+        store(request).thread_action, uid, business_id, inquiry_id, "", "unblock"
     )
     thread_signals(request).wake(business_id)
     return result

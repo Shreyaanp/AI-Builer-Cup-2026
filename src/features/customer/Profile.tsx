@@ -16,6 +16,7 @@ import {
 import { History, UserRound } from 'lucide-react'
 import { Sheet } from '../v1/Sheet'
 import { useCustomer } from './account'
+import { useGuestCopy } from './guestCopy'
 import type { Profile } from './types'
 import { useLocale } from '../../state/hooks'
 import { useAccountCopy } from './copy'
@@ -82,6 +83,7 @@ export function ProfileButton({ inline = false }: { inline?: boolean }) {
 export function ProfileSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const roles = useTheme().material
   const account = useCustomer()
+  const guest = useGuestCopy()
   const t = useAccountCopy()
   const locale = useLocale()
   // A deletion the server refused is said out loud, with a way to try it again.
@@ -131,7 +133,7 @@ export function ProfileSheet({ open, onClose }: { open: boolean; onClose: () => 
   }
   return (
     <Sheet open={open} onClose={onClose} titleId="customer-profile-title" title={t.profile}>
-      {account.status !== 'signed-in' ? (
+      {account.status !== 'signed-in' && account.status !== 'guest' ? (
         <Stack spacing={3}>
           <Typography variant="bodyLarge">{t.signInBody}</Typography>
           <SignInButton />
@@ -144,13 +146,20 @@ export function ProfileSheet({ open, onClose }: { open: boolean; onClose: () => 
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="titleMedium" noWrap>
-                {t.signedInAs.replace('{name}', account.name)}
+                {account.status === 'guest'
+                  ? account.name
+                  : t.signedInAs.replace('{name}', account.name)}
               </Typography>
               <Typography variant="bodySmall" color="text.secondary">
                 {t.followedCount(profile?.follows.length ?? 0)}
               </Typography>
             </Box>
           </Stack>
+          {account.status === 'guest' && (
+            <Typography variant="bodySmall" color="text.secondary">
+              {guest.privacy}
+            </Typography>
+          )}
           <Divider />
           <Box>
             <Typography variant="titleSmall" component="h3">
@@ -228,15 +237,17 @@ export function ProfileSheet({ open, onClose }: { open: boolean; onClose: () => 
           >
             {clearing ? t.clearing : t.clear}
           </Button>
-          <Button
-            color="error"
-            onClick={() => {
-              void account.signOut()
-              onClose()
-            }}
-          >
-            {t.signOut}
-          </Button>
+          {account.status === 'signed-in' && (
+            <Button
+              color="error"
+              onClick={() => {
+                void account.signOut()
+                onClose()
+              }}
+            >
+              {t.signOut}
+            </Button>
+          )}
         </Stack>
       )}
     </Sheet>

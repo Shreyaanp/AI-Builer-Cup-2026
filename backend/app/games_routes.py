@@ -14,7 +14,7 @@ import anyio
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from .community_routes import customer
+from .community_routes import customer, signed_customer
 from .customer_routes import shared
 from .games import (
     FIRST_PRIZE,
@@ -96,7 +96,13 @@ async def scratch(
     if ticket is None:
         raise HTTPException(404, "SCRATCH_NOT_FOUND")
     view = await build_view(
-        request, state, signed_in=True, lat=lat, lng=lng, timezone=tz, uid=principal.uid
+        request,
+        state,
+        signed_in=not principal.guest,
+        lat=lat,
+        lng=lng,
+        timezone=tz,
+        uid=principal.uid,
     )
     return RevealResult(card=scratch_view(ticket), passport=view)
 
@@ -116,7 +122,13 @@ async def freeze(
         passports(request).edit, principal.uid, lambda s: plan_freeze(s, current, body.week)
     )
     view = await build_view(
-        request, state, signed_in=True, lat=lat, lng=lng, timezone=tz, uid=principal.uid
+        request,
+        state,
+        signed_in=not principal.guest,
+        lat=lat,
+        lng=lng,
+        timezone=tz,
+        uid=principal.uid,
     )
     return FreezeResult(verdict=verdict, passport=view)
 
@@ -130,12 +142,12 @@ async def claim_coop_reward(
     tz: str = "UTC",
 ) -> PassportView:
     """Everyone who helped this week's goal collects the shared reward, once."""
-    principal = await customer(request)
+    principal = await signed_customer(request)
     await enforce_limits(request, [("passport", principal.uid)], anonymous=True)
     view = await build_view(
         request,
         await anyio.to_thread.run_sync(passports(request).get, principal.uid),
-        signed_in=True,
+        signed_in=not principal.guest,
         lat=lat,
         lng=lng,
         timezone=tz,
@@ -152,20 +164,26 @@ async def claim_coop_reward(
     if not claimed:
         raise HTTPException(409, "COOP_NOT_HELPED_OR_CLAIMED")
     return await build_view(
-        request, state, signed_in=True, lat=lat, lng=lng, timezone=tz, uid=principal.uid
+        request,
+        state,
+        signed_in=not principal.guest,
+        lat=lat,
+        lng=lng,
+        timezone=tz,
+        uid=principal.uid,
     )
 
 
 @router.post("/customer/games/perks/{perk_id}/use", response_model=PassportView)
 async def use_won_perk(perk_id: str, request: Request) -> PassportView:
     """Counter staff saw the won perk on the phone: it is marked used."""
-    principal = await customer(request)
+    principal = await signed_customer(request)
     state, used = await anyio.to_thread.run_sync(
         passports(request).edit, principal.uid, lambda s: use_perk(s, perk_id[:60])
     )
     if not used:
         raise HTTPException(409, "PERK_NOT_AVAILABLE")
-    return await build_view(request, state, signed_in=True, uid=principal.uid)
+    return await build_view(request, state, signed_in=not principal.guest, uid=principal.uid)
 
 
 @router.get("/public/shops/{business_id}/games", response_model=ShopGames)

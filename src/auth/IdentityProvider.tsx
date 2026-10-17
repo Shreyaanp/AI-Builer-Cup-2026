@@ -5,6 +5,7 @@ import { IdentityContext } from './context'
 import { SignInOverlay } from './SignInOverlay'
 import type { Identity } from './context'
 import { hiddenFeatures, readFeatures } from './features'
+import { upgradeGoogle } from './upgradeGoogle'
 
 type Operations = { auth: Auth; signIn: () => Promise<void>; signOut: () => Promise<void> }
 
@@ -68,19 +69,20 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
         operations.current = {
           auth,
           signIn: async () => {
-            await authSdk.signInWithPopup(auth, new authSdk.GoogleAuthProvider())
+            await upgradeGoogle(auth)
           },
           signOut: () => authSdk.signOut(auth),
         }
         unsubscribe = authSdk.onIdTokenChanged(
           auth,
           (user) => {
+            const signedIn = !!user && !user.isAnonymous
             if (!controller.signal.aborted)
               setState({
                 mode: 'firebase',
-                status: user ? 'ready' : 'signed-out',
-                scope: user ? `firebase:${user.uid}` : 'signed-out',
-                name: user?.displayName?.trim().split(/\s+/)[0] ?? '',
+                status: signedIn ? 'ready' : 'signed-out',
+                scope: signedIn ? `firebase:${user.uid}` : 'signed-out',
+                name: signedIn ? (user.displayName?.trim().split(/\s+/)[0] ?? '') : '',
                 error: '',
               })
           },
@@ -149,7 +151,8 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const getToken = useCallback(async (): Promise<string | null> => {
     if (state.mode === 'local' && state.status === 'ready') return null
     const user = operations.current?.auth.currentUser
-    if (!user) throw new Error('Sign in with Google to use your private conversations.')
+    if (!user || user.isAnonymous)
+      throw new Error('Sign in with Google to use your private conversations.')
     return user.getIdToken()
   }, [state.mode, state.status])
   return (

@@ -58,6 +58,7 @@ function lastPlace(): { lat: number; lng: number } | null {
  * the neighbourhood goal, stamp book, collection sets, quests, rescues, perks and the board.
  */
 export function Passport({ initialLocation }: { initialLocation?: CustomerLocation | null }) {
+  const account = useCustomer()
   const t = usePassportCopy()
   const roles = useTheme().material
   const [place] = useState(() =>
@@ -146,7 +147,7 @@ export function Passport({ initialLocation }: { initialLocation?: CustomerLocati
           <Impact view={view} />
           <Perks view={view} />
           <Leaderboard view={view} place={place} onSignIn={() => setSignIn(true)} />
-          {!signedIn && (
+          {!signedIn && account.status !== 'guest' && (
             <Box
               sx={{
                 p: 4,
@@ -250,13 +251,14 @@ function PendingScratch({
 }) {
   const t = useGamesCopy()
   const p = usePassportCopy()
+  const account = useCustomer()
   const locale = useLocale()
   const theme = useTheme()
   const gold = theme.chalk.sunflower
   const [shown, setShown] = useState<ScratchView | null>(null)
   const waiting = view.games?.scratch ?? []
   const card = shown ?? waiting[0] ?? null
-  if (!view.signed_in)
+  if (!view.signed_in && account.status !== 'guest')
     return (
       <Stack
         direction="row"

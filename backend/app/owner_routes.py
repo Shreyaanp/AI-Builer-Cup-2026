@@ -7,7 +7,7 @@ import anyio
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from . import brief, demand, rescue
-from .community_routes import act, customer, owned
+from .community_routes import act, owned, signed_customer
 from .customer_routes import shared
 from .limits import client_ip, enforce_limits
 from .merchant import Approval
@@ -91,7 +91,7 @@ async def public_rescue(
 async def reserve_rescue(
     business_id: str, rescue_id: str, body: rescue.HoldInput, request: Request
 ) -> rescue.Deal:
-    principal = await customer(request)
+    principal = await signed_customer(request)
     await enforce_limits(request, [("rescue:hold", principal.uid)], anonymous=True)
     await shared(request, business_id)
     entry = await owned(request, principal, business_id, body.thread_id)

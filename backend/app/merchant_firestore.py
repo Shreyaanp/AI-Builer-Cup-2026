@@ -915,6 +915,12 @@ class FirestoreMerchantStore:
                 transaction.delete(ref)
             elif action != "get":
                 transaction.set(ref, {**data, **record.model_dump()})
+                if action == "unblock":
+                    transaction.delete(block)
+                    if data.get("token_hash"):
+                        transaction.delete(
+                            business.collection("inquiry_blocks").document(data["token_hash"])
+                        )
                 if action == "block":
                     transaction.set(block, {"blocked": True})
                     if data.get("token_hash"):

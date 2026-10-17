@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from typing import Any
 
 import anyio
@@ -56,12 +57,36 @@ async def customer(request: Request) -> Principal:
     return await identity(request).require_customer(request)
 
 
+async def signed_customer(request: Request) -> Principal:
+    principal = await customer(request)
+    if principal.guest:
+        raise HTTPException(401, "SIGN_IN_REQUIRED")
+    return principal
+
+
+async def customer_contact(request: Request, principal: Principal) -> str:
+    """Keep a guest's contact marker stable after Google linking, including shop blocks."""
+    docs = community(request).docs
+    if principal.guest:
+        await anyio.to_thread.run_sync(
+            docs.put,
+            "guest_identity",
+            principal.uid,
+            principal.uid,
+            time.time(),
+            {"contact": principal.email},
+        )
+    prior = await anyio.to_thread.run_sync(docs.get, "guest_identity", principal.uid)
+    return str(prior["contact"]) if prior else principal.email or "customer@example.test"
+
+
 def display_name(principal: Principal) -> str:
     return principal.name or (principal.email.split("@")[0] if principal.email else "Customer")
 
 
 class Me(BaseModel):
     signed_in: bool
+    guest: bool = False
     name: str = ""
     mode: str = "local"
     profile: Profile | None = None
@@ -80,18 +105,47 @@ async def me(request: Request) -> Me:
     profile = await anyio.to_thread.run_sync(
         community(request).touch, principal.uid, display_name(principal)
     )
-    return Me(signed_in=True, name=display_name(principal), mode=mode, profile=profile)
+    return Me(
+        signed_in=not principal.guest,
+        guest=principal.guest,
+        name=display_name(principal),
+        mode=mode,
+        profile=profile,
+    )
 
 
 @router.post("/customer/session", response_model=Me)
 async def local_sign_in(body: LocalSignIn, request: Request, response: Response) -> Me:
     """Local and test mode only: stands in for Google sign-in (404 when Firebase is on)."""
     await enforce_limits(request, [("bootstrap", client_ip(request))], anonymous=True)
-    principal = identity(request).start_local_customer(response, body.name)
+    prior = await identity(request).customer(request)
+    principal = identity(request).start_local_customer(
+        response, body.name, prior if prior and prior.guest else None
+    )
     profile = await anyio.to_thread.run_sync(
         community(request).touch, principal.uid, principal.name
     )
     return Me(signed_in=True, name=principal.name, mode="local", profile=profile)
+
+
+@router.post("/customer/guest", response_model=Me)
+async def local_guest(request: Request, response: Response) -> Me:
+    if not request.app.state.v1_settings.guest_customer:
+        raise HTTPException(404, "Guest access is not enabled.")
+    await enforce_limits(request, [("bootstrap", client_ip(request))], anonymous=True)
+    principal = await identity(request).customer(request)
+    if principal is None:
+        principal = identity(request).start_local_customer(response, "", guest=True)
+    profile = await anyio.to_thread.run_sync(
+        community(request).touch, principal.uid, principal.name
+    )
+    return Me(
+        signed_in=not principal.guest,
+        guest=principal.guest,
+        name=principal.name,
+        mode=request.app.state.v1_settings.auth_mode,
+        profile=profile,
+    )
 
 
 @router.delete("/customer/session")
@@ -404,7 +458,7 @@ async def start_thread(business_id: str, body: NewThread, request: Request) -> C
             request,
             [
                 ("inquire:ip", business_id + ":" + client_ip(request)),
-                ("thread:customer", principal.uid),
+                ("thread:guest" if principal.guest else "thread:customer", principal.uid),
             ],
             anonymous=True,
         )
@@ -413,7 +467,7 @@ async def start_thread(business_id: str, body: NewThread, request: Request) -> C
             business_id,
             InquiryInput(
                 name=display_name(principal),
-                contact=principal.email or "customer@example.test",
+                contact=await customer_contact(request, principal),
                 message=body.text,
             ),
         )
@@ -461,7 +515,11 @@ async def post_message(
     principal = await customer(request)
     entry = await owned(request, principal, business_id, inquiry_id)
     shop = await shared(request, business_id)
-    await enforce_limits(request, [("thread:customer", principal.uid)], anonymous=True)
+    await enforce_limits(
+        request,
+        [("thread:guest" if principal.guest else "thread:customer", principal.uid)],
+        anonymous=True,
+    )
     record = await act(request, business_id, entry, "post", body.text)
     await anyio.to_thread.run_sync(
         community(request).mark_seen, principal.uid, business_id, inquiry_id, record.messages[-1].id
@@ -488,7 +546,9 @@ async def seen(business_id: str, inquiry_id: str, body: Seen, request: Request) 
 async def delete_thread(business_id: str, inquiry_id: str, request: Request) -> dict[str, bool]:
     principal = await customer(request)
     entry = await owned(request, principal, business_id, inquiry_id)
-    await act(request, business_id, entry, "delete")
+    record = await act(request, business_id, entry, "get")
+    if not record.blocked:
+        await act(request, business_id, entry, "delete")
     await anyio.to_thread.run_sync(
         community(request).drop_thread, principal.uid, business_id, inquiry_id
     )

@@ -2825,6 +2825,54 @@
         }
       }
     },
+    "/api/v1/businesses/{business_id}/inquiries/{inquiry_id}/unblock": {
+      "post": {
+        "summary": "Unblock Conversation",
+        "operationId": "unblock_conversation_api_v1_businesses__business_id__inquiries__inquiry_id__unblock_post",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "inquiry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Inquiry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inquiry"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/public/shops/{business_id}/inquiries/{inquiry_id}/messages/{message_id}/translation": {
       "post": {
         "summary": "Customer Translation",
@@ -3116,6 +3164,24 @@
                   },
                   "type": "object",
                   "title": "Response Local Sign Out Api V1 Customer Session Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customer/guest": {
+      "post": {
+        "summary": "Local Guest",
+        "operationId": "local_guest_api_v1_customer_guest_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
                 }
               }
             }
@@ -12054,6 +12120,11 @@
             "type": "boolean",
             "title": "Signed In"
           },
+          "guest": {
+            "type": "boolean",
+            "title": "Guest",
+            "default": false
+          },
           "name": {
             "type": "string",
             "title": "Name",
@@ -17441,6 +17512,11 @@
           "google_guide": {
             "default": false,
             "title": "Google Guide",
+            "type": "boolean"
+          },
+          "guest_customer": {
+            "default": false,
+            "title": "Guest Customer",
             "type": "boolean"
           }
         },

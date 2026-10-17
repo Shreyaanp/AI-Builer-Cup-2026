@@ -88,6 +88,11 @@ def change_thread(
         )
     elif action == "read":
         record.unread = False
+    elif action == "unblock":
+        if uid is None:
+            raise HTTPException(404, "Conversation not found.")
+        record.done = False
+        record.blocked = False
     elif action in ("close", "block"):
         record.done = True
         record.unread = False

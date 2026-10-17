@@ -10,6 +10,7 @@ import { useLocale } from '../../state/hooks'
 import { useWorkspace } from '../v1/workspaceContext'
 import type { TipList } from '../customer/types'
 import { OwnerTips } from './OwnerTips'
+import { useGuestCopy } from '../customer/guestCopy'
 
 const en = {
   ...conversationEnglish,
@@ -548,6 +549,7 @@ const chatTranslations: Record<Exclude<Locale, 'en'>, ConversationCopy> = {
 type Inquiry = components['schemas']['Inquiry']
 
 export function Messages({ businessId }: { businessId: string }) {
+  const guest = useGuestCopy()
   const locale = useLocale()
   const t = {
     ...en,
@@ -666,9 +668,11 @@ export function Messages({ businessId }: { businessId: string }) {
           <Typography component="h3" variant="titleMedium">
             {thread.name || t.unnamed}
           </Typography>
-          <Typography variant="bodyMedium" sx={{ overflowWrap: 'anywhere' }}>
-            {thread.contact}
-          </Typography>
+          {!thread.contact.endsWith('@guest.invalid') && (
+            <Typography variant="bodyMedium" sx={{ overflowWrap: 'anywhere' }}>
+              {thread.contact}
+            </Typography>
+          )}
           <ConversationView
             key={thread.id}
             thread={thread}
@@ -702,6 +706,24 @@ export function Messages({ businessId }: { businessId: string }) {
                 }}
               >
                 {t.closeChat}
+              </Button>
+            )}
+            {thread.blocked && (
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true)
+                  setError(false)
+                  try {
+                    await update(thread.id, 'unblock')
+                  } catch {
+                    setError(true)
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                {guest.unblock}
               </Button>
             )}
             {!thread.blocked && (
@@ -754,7 +776,9 @@ export function Messages({ businessId }: { businessId: string }) {
                 <Typography component="h3" variant="titleMedium">
                   {item.name || t.unnamed}
                 </Typography>
-                <Typography variant="bodyMedium">{item.contact}</Typography>
+                {!item.contact.endsWith('@guest.invalid') && (
+                  <Typography variant="bodyMedium">{item.contact}</Typography>
+                )}
                 <Typography variant="bodyLarge" sx={{ whiteSpace: 'pre-wrap' }}>
                   {/* The latest words from a person, not the AI's instant answer. */}
                   {item.messages?.filter((m) => m.kind !== 'ai').at(-1)?.text ?? item.message}

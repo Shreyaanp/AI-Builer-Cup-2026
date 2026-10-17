@@ -353,7 +353,9 @@ def create_app(
         return {
             **get_services(request).identity.bootstrap(request, response),
             "v1_enabled": settings.v1_enabled,
-            "features": FeatureFlags(google_guide=settings.feature_google_guide).model_dump(),
+            "features": FeatureFlags(
+                google_guide=settings.feature_google_guide, guest_customer=settings.guest_customer
+            ).model_dump(),
             "customer_origin": settings.customer_origin
             or (
                 "https://chalkboard.shreyaan.work"

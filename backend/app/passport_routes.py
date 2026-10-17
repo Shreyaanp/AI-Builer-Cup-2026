@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import shop_today
 from .auth import Principal
-from .community_routes import community, customer, display_name, identity
+from .community_routes import community, customer, display_name, identity, signed_customer
 from .customer_routes import shared
 from .discover import distance
 from .games import (
@@ -781,7 +781,7 @@ async def build_view(
 
 
 async def post_board(request: Request, principal: Principal, state: PassportState) -> None:
-    if not state.leaderboard or flagged(state, time.time()):
+    if principal.guest or not state.leaderboard or flagged(state, time.time()):
         return
     service = passports(request)
     week = week_of(local_now("UTC", time.time()).date())
@@ -894,7 +894,7 @@ async def stamp(body: StampInput, request: Request) -> StampResult:
         passport=await build_view(
             request,
             state,
-            signed_in=True,
+            signed_in=not principal.guest,
             lat=body.lat,
             lng=body.lng,
             timezone=str(shop.get("timezone") or "UTC"),
@@ -910,6 +910,8 @@ async def check(body: PublicStampInput, request: Request) -> StampResult:
     """Signed-out scan: the same checks, a signed receipt for the phone, nothing stored. The
     phone's earlier receipts are replayed first, so a second scan today is not a first visit."""
     await enforce_limits(request, [("passport", client_ip(request))], anonymous=True)
+    if request.app.state.v1_settings.guest_customer:
+        return await stamp(StampInput(**body.model_dump(exclude={"receipts"})), request)
     shop, visit = await verified_visit(request, body, None)
     state = PassportState()
     for _, earlier in await receipt_visits(request, body.receipts):
@@ -1025,12 +1027,19 @@ async def merge(
         for visit in fresh:
             visit.own_shop = visit.shop_id in owned
             apply_visit(state, visit)
-        apply_cards(state, body.cards, {k: v for k, v in shops.items() if v})
+        if not request.app.state.v1_settings.guest_customer:
+            apply_cards(state, body.cards, {k: v for k, v in shops.items() if v})
 
     state, _ = await anyio.to_thread.run_sync(service.edit, principal.uid, edit)
     await post_board(request, principal, state)
     return await build_view(
-        request, state, signed_in=True, lat=lat, lng=lng, timezone=tz, uid=principal.uid
+        request,
+        state,
+        signed_in=not principal.guest,
+        lat=lat,
+        lng=lng,
+        timezone=tz,
+        uid=principal.uid,
     )
 
 
@@ -1041,7 +1050,13 @@ async def passport(
     principal = await customer(request)
     state = await anyio.to_thread.run_sync(passports(request).get, principal.uid)
     return await build_view(
-        request, state, signed_in=True, lat=lat, lng=lng, timezone=tz, uid=principal.uid
+        request,
+        state,
+        signed_in=not principal.guest,
+        lat=lat,
+        lng=lng,
+        timezone=tz,
+        uid=principal.uid,
     )
 
 
@@ -1064,7 +1079,7 @@ async def erase_passport(request: Request) -> dict[str, bool]:
 @router.post("/customer/passport/shops/{business_id}/claim", response_model=PassportView)
 async def claim(business_id: str, request: Request) -> PassportView:
     """Counter staff saw the full card: it starts again."""
-    principal = await customer(request)
+    principal = await signed_customer(request)
     shop = await shared(request, business_id)
     needed = int(shop.get("stamps_needed") or 8)
     state, claimed = await anyio.to_thread.run_sync(
@@ -1072,7 +1087,7 @@ async def claim(business_id: str, request: Request) -> PassportView:
     )
     if not claimed:
         raise HTTPException(409, "CARD_NOT_FULL")
-    return await build_view(request, state, signed_in=True, uid=principal.uid)
+    return await build_view(request, state, signed_in=not principal.guest, uid=principal.uid)
 
 
 # --- Rescue collected (QR at pickup) ---
@@ -1082,7 +1097,7 @@ async def claim(business_id: str, request: Request) -> PassportView:
 async def collect_rescue(body: RescueStampInput, request: Request) -> StampResult:
     """Scanning the shop QR during the pickup window collects what this customer held in chat:
     leaf stamp, a rescued meal and the money saved."""
-    principal = await customer(request)
+    principal = await signed_customer(request)
     await enforce_limits(request, [("passport", principal.uid)], anonymous=True)
     shop, visit = await verified_visit(request, body, principal.uid)
     now = time.time()
@@ -1105,7 +1120,12 @@ async def collect_rescue(body: RescueStampInput, request: Request) -> StampResul
     return StampResult(
         outcome=outcome,
         passport=await build_view(
-            request, state, signed_in=True, lat=body.lat, lng=body.lng, uid=principal.uid
+            request,
+            state,
+            signed_in=not principal.guest,
+            lat=body.lat,
+            lng=body.lng,
+            uid=principal.uid,
         ),
     )
 
@@ -1178,7 +1198,7 @@ class BoardInput(BaseModel):
 
 @router.put("/customer/passport/leaderboard", response_model=PassportView)
 async def join_board(body: BoardInput, request: Request) -> PassportView:
-    principal = await customer(request)
+    principal = await signed_customer(request)
     service = passports(request)
 
     def edit(state: PassportState) -> None:
@@ -1190,14 +1210,14 @@ async def join_board(body: BoardInput, request: Request) -> PassportView:
     else:
         for area in state.week_points:
             await anyio.to_thread.run_sync(service.leave_board, principal.uid, area)
-    return await build_view(request, state, signed_in=True, uid=principal.uid)
+    return await build_view(request, state, signed_in=not principal.guest, uid=principal.uid)
 
 
 @router.get("/customer/passport/board", response_model=Board)
 async def board(
     request: Request, area: str = "", lat: float | None = None, lng: float | None = None
 ) -> Board:
-    principal = await customer(request)
+    principal = await signed_customer(request)
     service = passports(request)
     state = await anyio.to_thread.run_sync(service.get, principal.uid)
     if not area and lat is not None and lng is not None:

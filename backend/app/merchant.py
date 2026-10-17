@@ -1479,6 +1479,11 @@ class MerchantStore:
                     "UPDATE inquiries SET fields=? WHERE business_id=? AND id=?",
                     (json.dumps({**data, **record.model_dump()}), bid, iid),
                 )
+                if action == "unblock":
+                    for key in (contact_hash(record.contact), data.get("token_hash", "")):
+                        db.execute(
+                            "DELETE FROM inquiry_blocks WHERE business_id=? AND key=?", (bid, key)
+                        )
                 if action == "block":
                     for key in (contact_hash(record.contact), data.get("token_hash", "")):
                         db.execute("INSERT OR IGNORE INTO inquiry_blocks VALUES(?,?)", (bid, key))

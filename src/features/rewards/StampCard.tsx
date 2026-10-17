@@ -18,6 +18,8 @@ import { useRewardCopy } from './strings'
 import { celebrations, claimReward, useLanded, useRewards, visit } from './storage'
 import { useCopy } from '../v1/strings'
 import { useCustomer } from '../customer/account'
+import { SignInSheet } from '../customer/SignIn'
+import { useGuestCopy } from '../customer/guestCopy'
 import { setPassport, usePassport } from '../passport/store'
 import type { PassportView } from '../passport/store'
 import { fill } from '../passport/copy'
@@ -38,14 +40,15 @@ function useCardCount(shop: string, target: number) {
   const { view } = usePassport(null)
   const signedIn = account.status === 'signed-in'
   const server = view?.shops.find((card) => card.id === shop && card.slots > 0)
-  const local = signedIn ? 0 : (data.shops[shop]?.stamps ?? 0)
+  const identified = signedIn || account.status === 'guest'
+  const local = identified ? 0 : (data.shops[shop]?.stamps ?? 0)
   const stamps = Math.min(server?.stamps ?? WELCOME + local, target + WELCOME)
   return {
     signedIn,
     stamps,
     /** The customer's own stamps: the slots after the welcome ones. */
     count: stamps - WELCOME,
-    claimed: signedIn ? (server?.claimed ?? 0) : (data.shops[shop]?.claimed ?? 0),
+    claimed: identified ? (server?.claimed ?? 0) : (data.shops[shop]?.claimed ?? 0),
   }
 }
 
@@ -124,6 +127,8 @@ export function StampCard({
   }, [redeeming])
   // Signed in: the server's card (verified visits); signed out: this phone's card.
   const account = useCustomer()
+  const guestCopy = useGuestCopy()
+  const [signIn, setSignIn] = useState(false)
   const { signedIn, stamps, count, claimed } = useCardCount(shop, target)
   const full = count >= target
   const number = (value: number) => new Intl.NumberFormat(locale).format(value)
@@ -276,6 +281,10 @@ export function StampCard({
           sx={{ mt: 3 }}
           disabled={unavailable}
           onClick={() => {
+            if (account.status === 'guest') {
+              setSignIn(true)
+              return
+            }
             history.pushState({ ...(history.state as object | null), rewardRedeem: shop }, '')
             setFailedClaim(false)
             setRedeeming(true)
@@ -289,6 +298,13 @@ export function StampCard({
           {t.storage}
         </Alert>
       )}
+      <SignInSheet
+        open={signIn}
+        onClose={() => setSignIn(false)}
+        onSignedIn={() => setSignIn(false)}
+        title={guestCopy.title}
+        body={guestCopy.claim}
+      />
       <Dialog
         open={redeeming && full}
         fullScreen

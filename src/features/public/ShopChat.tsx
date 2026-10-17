@@ -89,7 +89,7 @@ export function ShopChat({
   const contactInput = useRef<HTMLTextAreaElement>(null)
   const account = useCustomer()
   const accountCopy = useAccountCopy()
-  const signedIn = account.status === 'signed-in'
+  const signedIn = account.status === 'signed-in' || account.status === 'guest'
   // A signed-in customer's existing chat with this shop (one per shop, like a messaging app).
   const [existing, setExisting] = useState<ChatSummary | null>(null)
   const { api } = account
@@ -298,7 +298,9 @@ export function ShopChat({
           ) : (
             <>
               <Typography variant="bodySmall" color="text.secondary">
-                {accountCopy.signedInAs.replace('{name}', account.name)}
+                {account.status === 'guest'
+                  ? account.name
+                  : accountCopy.signedInAs.replace('{name}', account.name)}
               </Typography>
               <TextField
                 label={t.customerMessage}

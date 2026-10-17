@@ -90,7 +90,7 @@ export function ChatList() {
   const r = useRescueCopy()
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
   const [failed, setFailed] = useState(false)
-  const signedIn = account.status === 'signed-in'
+  const signedIn = account.status === 'signed-in' || account.status === 'guest'
   const { api } = account
   const load = useCallback(
     () =>
@@ -323,7 +323,7 @@ export function ChatThread({ shop: shopId, thread: threadId }: { shop: string; t
   const input = useRef<HTMLInputElement>(null)
   const sent = useRef(0)
   const path = `/api/v1/customer/shops/${encodeURIComponent(shopId)}/threads/${encodeURIComponent(threadId)}`
-  const signedIn = account.status === 'signed-in'
+  const signedIn = account.status === 'signed-in' || account.status === 'guest'
   const { api, raw, refreshUnread } = account
 
   const apply = useCallback((next: ChatSummary | Thread) => {

@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,9 +21,15 @@ class Principal:
     # Verified Google profile fields; used only for a customer's display name and reply contact.
     email: str = ""
     name: str = ""
+    guest: bool = False
 
 
 CUSTOMER_COOKIE = "chalkboard_customer"
+
+
+def guest_principal(uid: str, source: str) -> Principal:
+    label = hashlib.sha256(uid.encode()).hexdigest()
+    return Principal(uid, source, label + "@guest.invalid", "Guest " + label[:6], True)
 
 
 class IdentityService:
@@ -77,13 +84,20 @@ class IdentityService:
         except BadSignature as error:
             raise HTTPException(401, "Start a private session first.") from error
 
-    async def bearer_principal(self, token: str) -> Principal:
+    async def bearer_principal(self, token: str, *, customer: bool = False) -> Principal:
         if not token or len(token) > 8192:
             raise HTTPException(401, "A valid sign-in token is required.")
         try:
             claims = await anyio.to_thread.run_sync(
                 lambda: firebase_auth.verify_id_token(token, app=self.firebase_app)
             )
+            if (
+                customer
+                and self.settings.guest_customer
+                and claims.get("firebase", {}).get("sign_in_provider") == "anonymous"
+            ):
+                uid = str(claims["uid"])
+                return guest_principal(uid, "firebase")
             if claims.get("firebase", {}).get("sign_in_provider") != "google.com" or not claims.get(
                 "email_verified"
             ):
@@ -107,20 +121,28 @@ class IdentityService:
             raise HTTPException(401, "Sign in before starting a conversation.")
         return await self.bearer_principal(authorization[7:])
 
-    # Customers: browsing needs no account; chatting, following and tips need Google sign-in.
+    # Customer identity is separate from owner authority; anonymous access is feature-gated.
     # Local mode stands in for Google with an explicit signed cookie, so the gate is real in tests.
     def customer_signer(self) -> URLSafeTimedSerializer:
         return URLSafeTimedSerializer(self.signer.secret_key, salt="customer")
 
-    def start_local_customer(self, response: Response, name: str) -> Principal:
+    def start_local_customer(
+        self, response: Response, name: str, prior: Principal | None = None, *, guest: bool = False
+    ) -> Principal:
         if self.settings.auth_mode != "local":
             raise HTTPException(404, "Use Google sign-in.")
         principal = Principal(
-            "local-customer-" + secrets.token_hex(8), "local", "customer@example.test", name
+            prior.uid if prior else "local-customer-" + secrets.token_hex(8),
+            "local",
+            "customer@example.test",
+            name,
+            guest,
         )
+        if guest:
+            principal = guest_principal(principal.uid, "local")
         response.set_cookie(
             CUSTOMER_COOKIE,
-            self.customer_signer().dumps([principal.uid, principal.name]),
+            self.customer_signer().dumps([principal.uid, principal.name, principal.guest]),
             httponly=True,
             samesite="strict",
             secure=self.settings.app_env == "production",
@@ -131,16 +153,23 @@ class IdentityService:
     async def customer(self, request: Request) -> Principal | None:
         if self.settings.auth_mode == "local":
             try:
-                uid, name = self.customer_signer().loads(
+                values = self.customer_signer().loads(
                     request.cookies.get(CUSTOMER_COOKIE, ""), max_age=30 * 86400
                 )
-                return Principal(str(uid), "local", "customer@example.test", str(name))
+                uid, name = values[:2]
+                guest = bool(values[2]) if len(values) > 2 else False
+                if guest and not self.settings.guest_customer:
+                    return None
+                if guest:
+                    return guest_principal(str(uid), "local")
+                email = "customer@example.test"
+                return Principal(str(uid), "local", email, str(name), guest)
             except (BadSignature, ValueError, TypeError):
                 return None
         authorization = request.headers.get("authorization", "")
         if not authorization.startswith("Bearer "):
             return None
-        return await self.bearer_principal(authorization[7:])
+        return await self.bearer_principal(authorization[7:], customer=True)
 
     async def require_customer(self, request: Request) -> Principal:
         principal = await self.customer(request)

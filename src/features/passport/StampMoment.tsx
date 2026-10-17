@@ -70,7 +70,7 @@ export function StampMoment({
   const [phase, setPhase] = useState<Phase>({ step: 'locating' })
   const [attempt, setAttempt] = useState(0)
   const [signIn, setSignIn] = useState(false)
-  const signedIn = account.status === 'signed-in'
+  const signedIn = account.status === 'signed-in' || account.status === 'guest'
 
   useEffect(() => {
     if (!open || account.status === 'loading') return
