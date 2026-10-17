@@ -107,6 +107,16 @@ class Settings(BaseSettings):
     shop_icon_daily_limit: int = Field(default=3, ge=1, le=20)
     # GCP credit is limited: one grounded call per question per ~1 km area for this long.
     maps_grounding_cache_seconds: int = Field(default=3600, ge=60, le=86_400)
+    # Purchase orders read from the SAP Business Accelerator Hub sandbox (sap_sandbox.py). Off,
+    # or with no key, the app shows the recorded sandbox sample, labelled as such. The key
+    # comes from the SAP_SANDBOX_API_KEY env var (Secret Manager in Cloud Run), never Git.
+    supply_sap_live: bool = False
+    sap_sandbox_api_key: SecretStr = SecretStr("")
+    sap_sandbox_url: str = Field(
+        default="https://sandbox.api.sap.com/s4hanacloud/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV",
+        pattern=r"^https://[A-Za-z0-9.-]+(/[A-Za-z0-9_./-]*)?$",
+    )
+    sap_sandbox_odata: Literal["v2", "v4"] = "v2"
     max_turn_seconds: int = Field(default=30, ge=1, le=120)
     max_voice_seconds: int = Field(default=120, ge=1, le=600)
     max_active_runs: int = Field(default=8, ge=1, le=32)

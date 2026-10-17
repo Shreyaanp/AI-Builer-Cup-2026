@@ -93,6 +93,7 @@ from .retail_recs import (
     configure_recommender,
 )
 from .sales_routes import router as sales_router
+from .sap_sandbox import SapSandbox
 from .search_engine import build_engine
 from .settings import Settings
 from .shop_language import ShopTranslator
@@ -202,6 +203,7 @@ def create_app(
         app.state.fraud_reviewer = FraudReviewer(settings)
         app.state.forecaster = ForecastService(settings)
         app.state.document_ai = DocumentAIReader(settings)
+        app.state.sap_sandbox = SapSandbox(settings)
         app.state.analytics = AnalyticsReader(settings)
         app.state.weather = WeatherService(settings)
         app.state.brief_writer = BriefWriter(settings)

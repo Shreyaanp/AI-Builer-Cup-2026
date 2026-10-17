@@ -645,3 +645,10 @@ def test_coach_drafts_reorders_and_rule_changes_as_cards(settings) -> None:  # n
         )
         events = stream("Where is my flour order?")
         assert "PO 4500012345" in next(e["text"] for e in events if e["kind"] == "reply")
+
+
+def test_sap_sandbox_route_shows_the_recorded_sample_when_off(client) -> None:
+    bid = http_shop(client)
+    answer = client.get(f"/api/v1/businesses/{bid}/supply/sap-sandbox").json()
+    assert answer["source"] == "recorded" and answer["reason"] == "off"
+    assert answer["orders"] and "<IDOC" in answer["orders"][0]["idoc"]

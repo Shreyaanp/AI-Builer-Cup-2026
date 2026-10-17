@@ -2197,6 +2197,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{business_id}/supply/sap-sandbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sap Sandbox Orders
+         * @description Real purchase orders from the SAP sandbox (read only), or the recorded sample.
+         */
+        get: operations["sap_sandbox_orders_api_v1_businesses__business_id__supply_sap_sandbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{business_id}/supply/suppliers/{supplier_id}/rules": {
         parameters: {
             query?: never;
@@ -10917,6 +10937,39 @@ export interface operations {
         };
     };
     overview_api_v1_businesses__business_id__supply_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sap_sandbox_orders_api_v1_businesses__business_id__supply_sap_sandbox_get: {
         parameters: {
             query?: never;
             header?: never;
