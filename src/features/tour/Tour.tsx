@@ -1,21 +1,25 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import {
   Box,
   Button,
   ButtonBase,
   Card,
   CircularProgress,
+  IconButton,
   Stack,
   Typography,
+  useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Volume2, VolumeX } from 'lucide-react'
 import { useLocale } from '../../state/hooks'
 import { useWorkspace } from '../v1/workspaceContext'
 import type { Destination } from '../v1/workspaceContext'
 import { tourCopy } from './strings'
 import { startDemoTour } from './tourActions'
 import { tour, useTourRunning } from './tourStore'
+import { narrationQueue } from './narrationQueue'
+import { narrationVoice } from './narrationVoice'
 
 const EASE = 'cubic-bezier(0.2, 0, 0, 1)'
 // Where each step's spotlight lands (data-tour anchors) and which screen it lives on.
@@ -30,6 +34,7 @@ const STEPS: { target: string; destination: Destination }[] = [
   { target: 'customer', destination: 'shop' },
 ]
 const PAD = 8
+const NARRATION_PREF = 'chalkboard.tour.narration'
 
 type Rect = { top: number; left: number; width: number; height: number }
 
@@ -42,11 +47,54 @@ function find(target: string): HTMLElement | null {
 export function TourHost() {
   const running = useTourRunning()
   const ws = useWorkspace()
-  const t = tourCopy(useLocale())
+  const language = useLocale()
+  const t = tourCopy(language)
   const roles = useTheme().material
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const [narrated, setNarrated] = useState(() => {
+    try {
+      return localStorage.getItem(NARRATION_PREF) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const narration = useMemo(() => narrationQueue(narrationVoice(ws.api)), [ws.api])
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<Rect | null>(null)
   const done = step >= STEPS.length
+  const copy = done ? null : t.steps[step]
+  const spokenText = copy ? `${copy.title}. ${copy.body}` : ''
+
+  // Tours are opened by a tap on an offer/menu control. A saved preference alone never starts one.
+  useEffect(() => {
+    if (running && narrated && spokenText) void narration.speak(spokenText, language)
+    return () => narration.stop()
+  }, [running, narrated, spokenText, language, narration])
+
+  const move = useCallback(
+    (delta: number) => {
+      narration.stop()
+      setStep((n) => Math.max(0, Math.min(n + delta, STEPS.length)))
+    },
+    [narration],
+  )
+
+  const close = useCallback(() => {
+    narration.stop()
+    setStep(0)
+    tour.stop()
+  }, [narration])
+
+  function toggleNarration() {
+    narration.stop()
+    const next = !narrated
+    setNarrated(next)
+    try {
+      localStorage.setItem(NARRATION_PREF, String(next))
+    } catch {
+      // Still usable when preference storage is unavailable.
+    }
+  }
 
   const measure = useCallback(() => {
     if (done) return setRect(null)
@@ -99,19 +147,14 @@ export function TourHost() {
     const key = (event: KeyboardEvent) => {
       if (!running) return
       if (event.key === 'Escape') close()
-      if (event.key === 'ArrowRight') setStep((n) => Math.min(n + 1, STEPS.length))
-      if (event.key === 'ArrowLeft') setStep((n) => Math.max(n - 1, 0))
+      if (event.key === 'ArrowRight') move(1)
+      if (event.key === 'ArrowLeft') move(-1)
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [running])
+  }, [running, close, move])
 
-  function close() {
-    setStep(0)
-    tour.stop()
-  }
   if (!running) return null
-  const copy = done ? null : t.steps[step]
   const below = rect ? rect.top + rect.height + 220 < window.innerHeight : true
   const cardTop = rect ? (below ? rect.top + rect.height + 12 : Math.max(12, rect.top - 212)) : 0
 
@@ -133,13 +176,13 @@ export function TourHost() {
       {/* The scrim with a moving cut-out around the highlighted element. */}
       <Box
         aria-hidden="true"
-        onClick={() => setStep((n) => n + 1)}
+        onClick={() => move(1)}
         sx={{
           position: 'fixed',
           borderRadius: '20px',
           boxShadow: '0 0 0 9999px rgba(0,0,0,0.62)',
           pointerEvents: 'auto',
-          transition: `top 450ms ${EASE}, left 450ms ${EASE}, width 450ms ${EASE}, height 450ms ${EASE}, opacity 300ms`,
+          transition: reducedMotion ? 'none' : `opacity 300ms ${EASE}`,
           outline: rect ? `2px solid ${roles.primary}` : 'none',
           ...(rect
             ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
@@ -155,11 +198,18 @@ export function TourHost() {
           right: 16,
           mx: 'auto',
           maxWidth: 420,
-          p: 4,
+          p: { xs: 3, sm: 4 },
           borderRadius: '24px',
           bgcolor: roles.surfaceContainerHigh,
-          animation: `tourRise 360ms ${EASE} both`,
-          ...(done || !rect ? { top: '50%', transform: 'translateY(-50%)' } : { top: cardTop }),
+          animation: reducedMotion ? 'none' : `tourRise 360ms ${EASE} both`,
+          maxHeight: 'calc(100dvh - 32px - env(safe-area-inset-bottom))',
+          overflowY: 'auto',
+          ...(done || !rect
+            ? { top: '50%', transform: 'translateY(-50%)' }
+            : {
+                top: { xs: 'auto', sm: cardTop },
+                bottom: { xs: 'calc(16px + env(safe-area-inset-bottom))', sm: 'auto' },
+              }),
         }}
       >
         {done ? (
@@ -186,16 +236,39 @@ export function TourHost() {
           </Stack>
         ) : (
           <>
-            <Typography variant="labelMedium" color="text.secondary">
-              {t.stepOf.replace('{n}', String(step + 1)).replace('{total}', String(STEPS.length))}
-            </Typography>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="labelMedium" color="text.secondary">
+                {t.stepOf.replace('{n}', String(step + 1)).replace('{total}', String(STEPS.length))}
+              </Typography>
+              <IconButton
+                aria-label={t.narration}
+                aria-pressed={narrated}
+                onClick={toggleNarration}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  color: narrated ? roles.primary : roles.onSurfaceVariant,
+                }}
+              >
+                {narrated ? <Volume2 size={22} /> : <VolumeX size={22} />}
+              </IconButton>
+            </Stack>
             <Typography id="tour-title" variant="titleLarge" sx={{ mt: 0.5 }}>
               {copy?.title}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               {copy?.body}
             </Typography>
-            <Stack direction="row" sx={{ mt: 3, alignItems: 'center', gap: 1 }}>
+            <Stack
+              direction="row"
+              sx={{
+                mt: 3,
+                alignItems: 'center',
+                gap: 1,
+                flexWrap: 'wrap',
+                '& button': { minHeight: 48 },
+              }}
+            >
               <Stack direction="row" sx={{ gap: 0.75, flex: 1 }} aria-hidden="true">
                 {STEPS.map((_, i) => (
                   <Box
@@ -205,7 +278,6 @@ export function TourHost() {
                       height: 6,
                       borderRadius: 3,
                       bgcolor: i <= step ? roles.primary : roles.outlineVariant,
-                      transition: `width 300ms ${EASE}`,
                     }}
                   />
                 ))}
@@ -214,11 +286,11 @@ export function TourHost() {
                 {t.skip}
               </Button>
               {step > 0 && (
-                <Button size="small" onClick={() => setStep((n) => n - 1)}>
+                <Button size="small" onClick={() => move(-1)}>
                   {t.back}
                 </Button>
               )}
-              <Button variant="contained" size="small" onClick={() => setStep((n) => n + 1)}>
+              <Button variant="contained" size="small" onClick={() => move(1)}>
                 {t.next}
               </Button>
             </Stack>

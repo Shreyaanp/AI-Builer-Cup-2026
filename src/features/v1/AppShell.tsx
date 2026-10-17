@@ -22,6 +22,7 @@ import {
   Leaf,
   MessageCircle,
   Plus,
+  Sparkles,
   Sprout,
   Store,
 } from 'lucide-react'
@@ -33,6 +34,9 @@ import type { Destination } from './workspaceContext'
 import { CoachWorkspace, type GalleryPhoto } from './screens/CoachScreen'
 import { NewShopFlow } from './NewShopFlow'
 import { TourHost } from '../tour/Tour'
+import { startDemoTour } from '../tour/tourActions'
+import { tourCopy } from '../tour/strings'
+import { useLocale } from '../../state/hooks'
 import { ShopScreen } from './screens/ShopScreen'
 import { ShopOverview } from './ShopTiles'
 import { GoogleScreen } from './screens/GoogleScreen'
@@ -348,9 +352,12 @@ function NavItem({
 
 function TopBar() {
   const t = useCopy()
+  const tourText = tourCopy(useLocale())
   const ws = useWorkspace()
   const roles = useTheme().material
   const [shopMenu, setShopMenu] = useState<HTMLElement | null>(null)
+  const [tourBusy, setTourBusy] = useState(false)
+  const [tourFailed, setTourFailed] = useState(false)
   // Settings live on the You tab now; the top bar keeps the shop switcher, new chat and "+".
   return (
     <Box
@@ -421,6 +428,26 @@ function TopBar() {
           </MenuItem>
         ))}
         <Divider />
+        <MenuItem
+          disabled={tourBusy}
+          sx={{ minHeight: 48 }}
+          onClick={() => {
+            openOwnerFeature(null)
+            void startDemoTour(ws, setTourBusy, setTourFailed).then((started) => {
+              if (started) setShopMenu(null)
+            })
+          }}
+        >
+          <ListItemIcon>
+            <Sparkles size={18} />
+          </ListItemIcon>
+          <ListItemText primary={tourBusy ? tourText.preparing : tourText.settings} />
+        </MenuItem>
+        {tourFailed && (
+          <Typography role="alert" color="error" sx={{ px: 2, maxWidth: 280 }}>
+            {tourText.failed}
+          </Typography>
+        )}
         <MenuItem
           onClick={() => {
             setShopMenu(null)

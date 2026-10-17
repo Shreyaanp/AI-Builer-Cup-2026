@@ -18,8 +18,10 @@ export async function startDemoTour(
     await ws.reload()
     ws.select(made.business_id)
     tour.start()
+    return true
   } catch {
     setFailed(true)
+    return false
   } finally {
     setBusy(false)
   }

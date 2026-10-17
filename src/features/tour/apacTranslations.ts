@@ -1,5 +1,5 @@
-import type { Locale } from '../../i18n/locales'
-import type { TourCopy } from './strings'
+import type { Locale } from '../../i18n/locales.js'
+import type { TourCopy } from './strings.js'
 
 /** The guided tour in the other APAC languages; keys missing here fall back to English. */
 export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
@@ -10,6 +10,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: '正在准备您的示范店…',
     failed: '无法准备示范店，请重试。',
     settings: '开始导览',
+    narration: '朗读',
     next: '下一步',
     back: '上一步',
     skip: '跳过',
@@ -48,6 +49,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: 'Menyediakan kedai demo anda…',
     failed: 'Tidak dapat menyediakan kedai demo. Sila cuba lagi.',
     settings: 'Mulakan lawatan',
+    narration: 'Baca dengan kuat',
     next: 'Seterusnya',
     back: 'Kembali',
     skip: 'Langkau',
@@ -99,6 +101,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: 'デモ店を準備しています…',
     failed: 'デモ店を準備できませんでした。もう一度お試しください。',
     settings: 'ツアーを始める',
+    narration: '読み上げる',
     next: '次へ',
     back: '戻る',
     skip: 'スキップ',
@@ -146,6 +149,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: '데모 가게를 준비하는 중…',
     failed: '데모 가게를 준비하지 못했어요. 다시 시도해 주세요.',
     settings: '둘러보기',
+    narration: '소리 내어 읽기',
     next: '다음',
     back: '이전',
     skip: '건너뛰기',
@@ -190,6 +194,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: 'Menyiapkan toko demo Anda…',
     failed: 'Gagal menyiapkan toko demo. Silakan coba lagi.',
     settings: 'Mulai tur',
+    narration: 'Bacakan',
     next: 'Berikutnya',
     back: 'Kembali',
     skip: 'Lewati',
@@ -240,6 +245,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: 'กำลังเตรียมร้านตัวอย่าง…',
     failed: 'เตรียมร้านตัวอย่างไม่ได้ โปรดลองอีกครั้ง',
     settings: 'เริ่มทัวร์',
+    narration: 'อ่านออกเสียง',
     next: 'ถัดไป',
     back: 'ย้อนกลับ',
     skip: 'ข้าม',
@@ -281,6 +287,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: 'Đang chuẩn bị cửa hàng mẫu…',
     failed: 'Không chuẩn bị được cửa hàng mẫu. Vui lòng thử lại.',
     settings: 'Bắt đầu tham quan',
+    narration: 'Đọc thành tiếng',
     next: 'Tiếp',
     back: 'Quay lại',
     skip: 'Bỏ qua',
@@ -333,6 +340,7 @@ export const tourApac: Partial<Record<Locale, Partial<TourCopy>>> = {
     preparing: 'Inihahanda ang iyong demo na tindahan…',
     failed: 'Hindi maihanda ang demo na tindahan. Pakisubukang muli.',
     settings: 'Simulan ang tour',
+    narration: 'Basahin nang malakas',
     next: 'Susunod',
     back: 'Bumalik',
     skip: 'Laktawan',

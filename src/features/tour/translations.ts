@@ -1,5 +1,5 @@
-import type { Locale } from '../../i18n/locales'
-import type { TourCopy } from './strings'
+import type { Locale } from '../../i18n/locales.js'
+import type { TourCopy } from './strings.js'
 
 type Copy = Partial<TourCopy>
 
@@ -12,6 +12,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
     preparing: 'आपकी डेमो दुकान तैयार हो रही है…',
     failed: 'डेमो दुकान तैयार नहीं हो सकी। कृपया फिर कोशिश करें।',
     settings: 'टूर लें',
+    narration: 'बोलकर सुनाएँ',
     next: 'आगे',
     back: 'पीछे',
     skip: 'छोड़ें',
@@ -31,7 +32,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
       },
       {
         title: 'एक मिनट में दिन बंद करें',
-        body: 'हर शाम बिक्री रिपोर्ट, डिलीवरी और स्टॉक की फ़ोटो लें। Chalkboard उन्हें पढ़ता है; आप एक बार जाँचते हैं।',
+        body: 'हर शाम बिक्री रिपोर्ट, डिलीवरी और स्टॉक की फ़ोटो लें। चॉकबोर्ड उन्हें पढ़ता है; आप एक बार जाँचते हैं।',
       },
       {
         title: 'सामान कम है? सप्लायर खोजें',
@@ -42,12 +43,12 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
         body: '“चाय अब 20 रुपये की है, समोसे ख़त्म।” आपकी पुष्टि के बिना कुछ नहीं बदलता।',
       },
       {
-        title: 'Google पर आएँ, कदम-दर-कदम',
-        body: 'आपकी जानकारी और फ़ोटो से Google प्रोफ़ाइल तैयार हो जाती है।',
+        title: 'गूगल पर आएँ, कदम-दर-कदम',
+        body: 'आपकी जानकारी और फ़ोटो से गूगल प्रोफ़ाइल तैयार हो जाती है।',
       },
       {
         title: 'अपना पेज शेयर करें',
-        body: 'ग्राहक आपका QR स्कैन करके आज का मेन्यू देखते हैं, सवाल पूछते हैं और स्टैम्प जमा करते हैं।',
+        body: 'ग्राहक आपका क्यूआर कोड स्कैन करके आज का मेन्यू देखते हैं, सवाल पूछते हैं और स्टैम्प जमा करते हैं।',
       },
     ],
     doneTitle: 'आप तैयार हैं',
@@ -63,6 +64,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
     preparing: 'உங்கள் டெமோ கடை தயாராகிறது…',
     failed: 'டெமோ கடையைத் தயாரிக்க முடியவில்லை. மீண்டும் முயலவும்.',
     settings: 'சுற்றிப் பார்',
+    narration: 'வாசித்துக் காட்டு',
     next: 'அடுத்து',
     back: 'பின்',
     skip: 'தவிர்',
@@ -113,6 +115,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
     preparing: 'আপনার ডেমো দোকান তৈরি হচ্ছে…',
     failed: 'ডেমো দোকান তৈরি করা গেল না। আবার চেষ্টা করুন।',
     settings: 'ট্যুর নিন',
+    narration: 'পড়ে শোনান',
     next: 'পরের',
     back: 'আগের',
     skip: 'বাদ দিন',
@@ -163,6 +166,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
     preparing: 'మీ డెమో షాప్ సిద్ధమవుతోంది…',
     failed: 'డెమో షాప్ సిద్ధం కాలేదు. మళ్లీ ప్రయత్నించండి.',
     settings: 'టూర్ చూడండి',
+    narration: 'చదివి వినిపించండి',
     next: 'తర్వాత',
     back: 'వెనక్కి',
     skip: 'దాటవేయండి',
@@ -213,6 +217,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
     preparing: 'तुमचे डेमो दुकान तयार होत आहे…',
     failed: 'डेमो दुकान तयार होऊ शकले नाही. कृपया पुन्हा प्रयत्न करा.',
     settings: 'टूर घ्या',
+    narration: 'वाचून ऐकवा',
     next: 'पुढे',
     back: 'मागे',
     skip: 'वगळा',
@@ -263,6 +268,7 @@ export const tourTranslations: Partial<Record<Locale, Copy>> = {
     preparing: 'ನಿಮ್ಮ ಡೆಮೊ ಅಂಗಡಿ ಸಿದ್ಧವಾಗುತ್ತಿದೆ…',
     failed: 'ಡೆಮೊ ಅಂಗಡಿ ಸಿದ್ಧಪಡಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     settings: 'ಪ್ರವಾಸ ಮಾಡಿ',
+    narration: 'ಓದಿ ಕೇಳಿಸಿ',
     next: 'ಮುಂದೆ',
     back: 'ಹಿಂದೆ',
     skip: 'ಬಿಡಿ',

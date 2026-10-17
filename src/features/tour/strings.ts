@@ -1,6 +1,6 @@
-import type { Locale } from '../../i18n/locales'
-import { tourApac } from './apacTranslations'
-import { tourTranslations } from './translations'
+import type { Locale } from '../../i18n/locales.js'
+import { tourApac } from './apacTranslations.js'
+import { tourTranslations } from './translations.js'
 
 /** The guided tour. Languages without their own copy fall back to English. */
 const en = {
@@ -10,6 +10,7 @@ const en = {
   preparing: 'Setting up your demo shop…',
   failed: 'Couldn’t set up the demo shop. Please try again.',
   settings: 'Take the tour',
+  narration: 'Read aloud',
   next: 'Next',
   back: 'Back',
   skip: 'Skip',
