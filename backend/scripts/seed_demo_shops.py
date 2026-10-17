@@ -68,6 +68,9 @@ def seed(
             changed = store.attach_demo_owner(seed_owner_uid, demo.id, owner_uid) or changed
             attached.add(demo.city)
         results.append((demo.id, changed))
+    from app.demo_supply_seed import seed as seed_supply_chain
+
+    seed_supply_chain(store)
     return results
 
 
