@@ -12,6 +12,7 @@ import { BusinessDialog, ProductDialog } from './EditDialogs'
 import { FaceDialog } from './FaceDialog'
 import { customerShopLink, safeCustomerOrigin } from '../../app/router'
 import { overlayHandled } from './backStack'
+import { track } from '../../app/analytics'
 
 function readSpeak() {
   try {
@@ -233,6 +234,7 @@ export function WorkspaceProvider({
       newShopReady: shopReady,
       dismissNewShopReady: () => setShopReady(false),
       startNewShop: () => {
+        track('onboarding_started')
         setCoachActions(false)
         setShopReady(false)
         setNewShopPhase('hero')

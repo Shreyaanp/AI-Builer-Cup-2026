@@ -25,6 +25,7 @@ import { useSourcingCopy } from './copy'
 import { deliveryLabel, useOrders, useReceiveOrder } from './orderData'
 import { DemoChip, StatusChip } from './SourcingCards'
 import type { Order } from './types'
+import { track } from '../../app/analytics'
 
 const OPEN = new Set(['sent', 'needs_reply', 'confirmed'])
 
@@ -47,7 +48,10 @@ export function OrdersTile() {
         }
         label={s.orders}
         value={orders === null ? '–' : s.ordersValue(active.length)}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          track('purchase_orders_opened')
+          setOpen(true)
+        }}
       >
         {latest && (
           <Supporting>

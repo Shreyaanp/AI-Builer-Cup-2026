@@ -360,6 +360,7 @@ def create_app(
                 if settings.app_env == "production"
                 else "http://127.0.0.1:3200"
             ),
+            "ga_measurement_id": settings.ga_measurement_id,
             "coach_mode": settings.coach_mode,
             "maps_browser_key": (
                 settings.maps_browser_key.get_secret_value() if settings.maps_browser_key else ""

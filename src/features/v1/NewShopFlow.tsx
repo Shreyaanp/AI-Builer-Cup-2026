@@ -67,6 +67,7 @@ import { defaultCurrency, formatPrice } from './format'
 import { NewShopReady } from './NewShopStage'
 import { useNewShopCopy } from './newShopCopy'
 import { useNameSuggestion, useOnboardingCopy } from './onboardingCopy'
+import { track } from '../../app/analytics'
 import { Sheet } from './Sheet'
 import { dietaryMissing, factEntries } from './shopProgress'
 import { useNextStepsCopy } from './nextStepsCopy'
@@ -726,6 +727,8 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
 
   /** Any turn: in the live voice session when one is open, otherwise a streamed text turn. */
   async function say(message: string) {
+    if (/^(stop|that's enough|that is enough|we're done|we are done)$/i.test(message.trim()))
+      track('stop_said')
     clearSilence()
     // Typing always works: a word after the end simply carries the conversation on.
     if (endedRef.current) {
@@ -802,6 +805,7 @@ function Journey({ setGalleryPhoto }: { setGalleryPhoto: (photo: GalleryPhoto | 
     const blocked = canVoice && (await micPermission()) === 'denied'
     if (blocked) setPreflight({ kind: 'mic-blocked' })
     if (canVoice && !blocked) {
+      track('voice_used')
       wantVoice.current = true
       void voice.start()
     } else {

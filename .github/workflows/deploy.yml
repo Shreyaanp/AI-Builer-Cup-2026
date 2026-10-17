@@ -79,6 +79,7 @@ jobs:
       FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
       FIREBASE_WEB_APP_ID: ${{ vars.FIREBASE_WEB_APP_ID }}
       FEATURE_GOOGLE_GUIDE: ${{ vars.FEATURE_GOOGLE_GUIDE || 'true' }}
+      GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID || '' }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:

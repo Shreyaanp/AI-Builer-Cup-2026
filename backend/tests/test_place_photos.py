@@ -111,6 +111,7 @@ def test_photo_route_validation_demo_and_public_origin(tmp_path: Path) -> None:
         app_env="test",
         v1_enabled=True,
         customer_origin="https://customer.example",
+        ga_measurement_id="G-ABC123",
         merchant_database=str(tmp_path / "merchant.sqlite"),
         recall_path=str(tmp_path / "recall"),
         rate_limits_enabled=False,
@@ -121,6 +122,7 @@ def test_photo_route_validation_demo_and_public_origin(tmp_path: Path) -> None:
         assert (
             client.get("/api/v1/bootstrap").json()["customer_origin"] == "https://customer.example"
         )
+        assert client.get("/api/v1/bootstrap").json()["ga_measurement_id"] == "G-ABC123"
         assert (
             client.get("/api/v1/place-photo", params={"name": NAME, "width": 801}).status_code
             == 422

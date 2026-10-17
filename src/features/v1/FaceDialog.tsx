@@ -29,6 +29,7 @@ import type { ReactNode } from 'react'
 import { useConversationCopy } from '../discover/conversationCopy'
 import type { Api } from './api'
 import { useBackClose } from './backStack'
+import { track } from '../../app/analytics'
 import { motion, shape } from '../../design/theme'
 import { announceTrustChange } from '../trust/useTrust'
 import { fill, useTrustCopy } from '../trust/copy'
@@ -159,6 +160,7 @@ export function FaceDialog({
       })
     } catch (error) {
       if (live.current === capture) {
+        track('face_check_result', { result: 'unavailable' })
         release()
         finish({ result: 'unavailable', reason: cameraProblem(error) })
       }
@@ -338,6 +340,7 @@ export function FaceDialog({
         signal: capture.abort.signal,
       })
       if (live.current === capture) {
+        track('face_check_result', { result: answer.result })
         if (answer.passed_prompts && answer.passed_prompts.length > 0) {
           setPassedPrompts((prev) =>
             Array.from(new Set([...prev, ...(answer.passed_prompts ?? [])])),
@@ -347,7 +350,10 @@ export function FaceDialog({
         if (answer.result === 'verified' || answer.result === 'in_review') announceTrustChange()
       }
     } catch {
-      if (live.current === capture) finish({ result: 'unavailable', reason: 'worker_unavailable' })
+      if (live.current === capture) {
+        track('face_check_result', { result: 'unavailable' })
+        finish({ result: 'unavailable', reason: 'worker_unavailable' })
+      }
     } finally {
       clearTimeout(slowTimer)
       if (live.current === capture) release()

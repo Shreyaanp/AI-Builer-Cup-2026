@@ -30,6 +30,7 @@ import { HAND_FONT, motion } from '../../design/theme'
 import { customerNavigate, goTo } from '../frontdoors/navigation'
 import type { CustomerLocation } from '../frontdoors/CustomerApp'
 import { useCustomer } from '../customer/account'
+import { track } from '../../app/analytics'
 import { accountCopyFor } from '../customer/copy'
 import { preferenceChips } from '../customer/preferences'
 import { openedShops } from './opened'
@@ -362,6 +363,7 @@ export default function AskHome({
         recsEvent({ kind: 'ask', query: turn.q })
 
         const handleAnswer = (answer: AskAnswer) => {
+          track('results_shown')
           if (answer.command) {
             const { kind, shop_id } = answer.command
             const path =
@@ -402,6 +404,7 @@ export default function AskHome({
             opened: openedShops(),
           }),
         })
+        track('ask_sent')
 
         if (controller.signal.aborted) {
           update(turn.id, { status: 'stopped' })

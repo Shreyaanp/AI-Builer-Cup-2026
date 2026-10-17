@@ -14,6 +14,7 @@ import {
 import { Camera, FileSpreadsheet, Keyboard, RotateCcw } from 'lucide-react'
 import { formatPrice, shopCurrency, toMinor } from './format'
 import { Sheet } from './Sheet'
+import { track } from '../../app/analytics'
 import { useCopy } from './strings'
 import { useWorkspace } from './workspaceContext'
 import { IMPORT_ACCEPT, type Importer, type SalesImport } from './useImport'
@@ -210,6 +211,7 @@ export function SalesImportSheet({
         },
       )
       await ws.reload()
+      if (sales) track('pos_import_done', { rows: sales.rows })
       ws.notify(t.salesSaved)
       if (showResultOnSave) setSaved(true)
       else onClose()

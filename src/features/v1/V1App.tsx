@@ -11,11 +11,16 @@ import { WorkspaceProvider } from './WorkspaceProvider'
 
 import { LanguageStep } from '../language/LanguageStep'
 import { useNeedsLanguage } from '../language/needsLanguage'
+import { setAnalyticsConsent } from '../../app/analytics'
 
 /** First run: splash → welcome/sign-in → language → consent → workspace. */
 export default function V1App() {
   const identity = useIdentity()
   const [preview, setPreview] = useState(false)
+  useEffect(() => {
+    if (identity.status !== 'ready' || (identity.mode === 'local' && !preview))
+      setAnalyticsConsent(false)
+  }, [identity.status, identity.mode, preview])
   if (identity.status === 'loading') return <Splash />
   if (identity.status !== 'ready' || (identity.mode === 'local' && !preview))
     return <Landing onPreview={() => setPreview(true)} />
@@ -60,6 +65,9 @@ function Account({ onLeave }: { onLeave: () => void }) {
       })
     return () => abort.abort()
   }, [api])
+  useEffect(() => {
+    setAnalyticsConsent(me?.consent_current === true)
+  }, [me?.consent_current])
   if (failed)
     return <AccountError onSignOut={identity.mode === 'firebase' ? identity.signOut : onLeave} />
   if (!me) return <Splash />

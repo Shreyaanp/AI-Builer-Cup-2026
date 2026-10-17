@@ -14,6 +14,7 @@ import { IdentityProvider } from '../auth/IdentityProvider'
 import { useIdentity } from '../auth/useIdentity'
 import { isLanguagePref, resolveLocale } from '../i18n/locales'
 import { loadScriptFont } from '../i18n/fonts'
+import { configureAnalytics, watchRouteChanges } from './analytics'
 
 /** Kept apart from the preferences object, which older code and tests overwrite whole. */
 const LANGUAGE_CHOSEN = 'niva.language.chosen'
@@ -58,7 +59,13 @@ function OwnedWorkspace({ children }: { children: ReactNode }) {
   return <BusinessWorkspace key={workspaceScope}>{children}</BusinessWorkspace>
 }
 
-function Providers({ children }: { children: ReactNode }) {
+function Providers({
+  children,
+  analyticsApp,
+}: {
+  children: ReactNode
+  analyticsApp: 'owner' | 'customer'
+}) {
   const [preferences, preferencesDispatch] = useReducer(
     preferencesReducer,
     undefined,
@@ -88,6 +95,25 @@ function Providers({ children }: { children: ReactNode }) {
       /* App remains usable without storage. */
     }
   }, [preferences.language, preferences.appearance, preferences.languageChosen])
+  useEffect(() => {
+    const stopWatching = watchRouteChanges()
+    const abort = new AbortController()
+    void fetch('/api/v1/bootstrap', { signal: abort.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((config: { ga_measurement_id?: string } | null) => {
+        if (!abort.signal.aborted) {
+          const region = navigator.languages.some((language) => /-SG(?:-|$)/i.test(language))
+            ? 'SG'
+            : 'IN'
+          configureAnalytics(config?.ga_measurement_id ?? '', false, analyticsApp, region)
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      abort.abort()
+      stopWatching()
+    }
+  }, [analyticsApp])
   return (
     <PreferencesContext value={preferences}>
       <PreferencesDispatchContext value={preferencesDispatch}>
@@ -103,14 +129,16 @@ function Providers({ children }: { children: ReactNode }) {
 export function AppProviders({
   children,
   business = true,
+  analyticsApp = 'owner',
 }: {
   children: ReactNode
   business?: boolean
+  analyticsApp?: 'owner' | 'customer'
 }) {
-  if (!business) return <Providers>{children}</Providers>
+  if (!business) return <Providers analyticsApp={analyticsApp}>{children}</Providers>
   return (
     <IdentityProvider>
-      <Providers>
+      <Providers analyticsApp={analyticsApp}>
         <OwnedWorkspace>{children}</OwnedWorkspace>
       </Providers>
     </IdentityProvider>

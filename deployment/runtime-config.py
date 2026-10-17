@@ -47,6 +47,7 @@ config = {
     "FIRESTORE_NAMESPACE": target["firestoreNamespace"],
     # Share links and QR codes made in the business app point customers here.
     "CUSTOMER_ORIGIN": "https://chalkboard.shreyaan.work",
+    "GA_MEASUREMENT_ID": os.environ.get("GA_MEASUREMENT_ID", "").strip(),
     "ALLOWED_ORIGINS": json.dumps([origin, "https://chalkboard.shreyaan.work", "https://business.chalkboard.shreyaan.work"]),
     "FIREBASE_WEB_API_KEY": os.environ["FIREBASE_WEB_API_KEY"].strip(),
     "FIREBASE_WEB_APP_ID": os.environ["FIREBASE_WEB_APP_ID"].strip(),

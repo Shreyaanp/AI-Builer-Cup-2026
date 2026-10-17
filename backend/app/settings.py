@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     frontend_dist: str = ""
     release_commit: str = "local"
     customer_origin: str = ""
+    ga_measurement_id: str = Field(default="", pattern=r"^(|G-[A-Z0-9]+)$")
     v1_enabled: bool = False
     feature_google_guide: bool = True
     merchant_backend: Literal["sqlite", "firestore"] = "sqlite"

@@ -12,6 +12,7 @@ import {
 import { Check, Plus } from 'lucide-react'
 import { popIn } from '../../design/chalkMotion'
 import { useCustomer } from './account'
+import { track } from '../../app/analytics'
 import { useAccountCopy } from './copy'
 
 /**
@@ -43,6 +44,7 @@ export function FollowButton({
     setFailed(false)
     try {
       await account.setFollow(id, !following)
+      if (!following) track('follow')
       setChanged((n) => n + 1)
     } catch {
       setFailed(true)

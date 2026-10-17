@@ -144,7 +144,9 @@ def test_owner_analytics_from_bigquery_then_live_on_failure(app) -> None:  # noq
         )
         app.state.analytics = broken
         fallback = client.get(f"/api/v1/businesses/{bid}/analytics").json()
-        assert fallback["source"] == "live" and fallback["yesterday"]["sales"] == 1500
+        # Saturdays sell double in `history`, so the expected day total follows the calendar.
+        expected = 20 * 150 if yesterday.weekday() == 5 else 10 * 150
+        assert fallback["source"] == "live" and fallback["yesterday"]["sales"] == expected
 
 
 async def test_export_loads_one_partition_per_day_without_names(app) -> None:  # noqa: F811
